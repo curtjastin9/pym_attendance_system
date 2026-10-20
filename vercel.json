@@ -9,7 +9,14 @@
     { "src": "api_records.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
     { "src": "api_coy.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
     { "src": "api_attendance.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
-    { "src": "*.{css,js,png,ico,jpg,svg}", "use": "@vercel/static" }
+    { "src": "**/*.png", "use": "@vercel/static" },
+    { "src": "**/*.jpg", "use": "@vercel/static" },
+    { "src": "**/*.jpeg", "use": "@vercel/static" },
+    { "src": "**/*.ico", "use": "@vercel/static" },
+    { "src": "**/*.svg", "use": "@vercel/static" },
+    { "src": "**/*.webp", "use": "@vercel/static" },
+    { "src": "**/*.css", "use": "@vercel/static" },
+    { "src": "**/*.js", "use": "@vercel/static" }
   ],
   "routes": [
     { "src": "/", "dest": "/home.php" },
