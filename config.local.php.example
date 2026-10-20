@@ -1,0 +1,7 @@
+<?php
+// Copy this file to config.local.php on your live server and fill in the real values.
+// (Create a dedicated MySQL user with a strong password — do NOT use root.)
+$DB_HOST = 'localhost';
+$DB_NAME = 'your_database_name';
+$DB_USER = 'your_database_user';
+$DB_PASS = 'your_strong_password';

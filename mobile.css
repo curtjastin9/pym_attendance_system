@@ -1,0 +1,238 @@
+/* ============================================================
+   PYM — Mobile & accessibility layer
+   Loaded after style.css (and re-appended last by mobile.js so it
+   also wins over the styles injected by records.js / excused.js).
+   ============================================================ */
+
+/* ---------- Global: touch, focus, motion ---------- */
+html { -webkit-text-size-adjust: 100%; }
+body { -webkit-tap-highlight-color: transparent; }
+a, button, select, input, label, summary { touch-action: manipulation; }
+
+:focus-visible { outline: 3px solid var(--sapphire-glow); outline-offset: 2px; border-radius: 6px; }
+
+.skip-link {
+  position: absolute; left: 12px; top: -60px; z-index: 10000;
+  background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 10px;
+  font-weight: 700; font-size: 14px; transition: top .2s;
+}
+.skip-link:focus { top: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* ---------- Password show/hide ---------- */
+.pw-wrap { position: relative; display: flex; width: 100%; }
+.pw-wrap > input { flex: 1; width: 100%; padding-right: 50px !important; }
+.pw-toggle {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 42px; height: 42px; border: none; background: none; color: var(--text-soft);
+  border-radius: 10px; font-size: 15px; display: grid; place-items: center;
+}
+.pw-toggle:hover { color: var(--text-primary); background: var(--bg); }
+.auth-form .pw-wrap { margin: 0; }
+
+/* ---------- Bottom navigation (hidden on desktop) ---------- */
+.bottom-nav { display: none; }
+
+/* ---------- Attendance tally (all sizes) ---------- */
+
+/* ============================================================
+   TABLET / PHONE  (≤ 768px)
+   ============================================================ */
+@media (max-width: 768px) {
+  body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+
+  /* Drawer */
+  .sidebar { width: min(84vw, 300px); height: 100vh; height: 100dvh; padding-bottom: env(safe-area-inset-bottom); }
+  .sidebar-logo { padding-top: calc(22px + env(safe-area-inset-top)); }
+  .nav-item, .logout-btn { min-height: 46px; }
+
+  /* Top bar */
+  .topbar { height: auto; min-height: 58px; padding: env(safe-area-inset-top) 14px 0; gap: 10px; }
+  .page-title { font-size: 16.5px; }
+  .page-subtitle { display: none; }
+  .hamburger { display: flex; width: 44px; height: 44px; border-radius: 12px; }
+  .topbar-avatar { width: 40px; height: 40px; }
+
+  /* Bottom nav */
+  .bottom-nav {
+    display: grid; grid-template-columns: repeat(var(--bn, 5), 1fr); gap: 2px;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 80;
+    background: rgba(255,255,255,.95); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 28px rgba(8,16,31,.08);
+  }
+  .bn-item {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    min-height: 54px; border: none; background: none; border-radius: 14px;
+    color: var(--text-soft); font-size: 10.5px; font-weight: 700; letter-spacing: .1px;
+    transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  }
+  .bn-item i { font-size: 18px; transition: transform var(--dur) var(--ease-spring); }
+  .bn-item:active { background: var(--bg); }
+  .bn-item.active { color: var(--sapphire); background: var(--sapphire-pale); }
+  .bn-item.active i { transform: translateY(-1px) scale(1.12); }
+
+  /* Layout */
+  .page { padding: 14px 14px 20px; }
+  .card { padding: 16px; border-radius: 16px; }
+  .card-header { margin-bottom: 14px; flex-wrap: wrap; }
+  .card-header h3 { font-size: 15.5px; }
+
+  /* Dashboard */
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .stat-card { padding: 16px; border-radius: 16px; }
+  .stat-number { font-size: 28px; }
+  .stat-label { font-size: 9.5px; letter-spacing: .8px; }
+  .stat-icon { font-size: 26px; }
+  .mid-grid, .bottom-grid { gap: 14px; margin-bottom: 14px; }
+  .service-row { flex-wrap: wrap; }
+  .view-btn { min-height: 40px; padding: 8px 16px; }
+  .chart-bars { height: 140px; }
+  .slot-name { width: 104px; min-width: 104px; }
+
+  /* Forms — 16px stops iOS zooming on focus */
+  input[type], input:not([type]), select, textarea { font-size: 16px !important; }
+  .form-field input, .form-field select, .form-field textarea { min-height: 46px; }
+  .form-row { flex-direction: column; gap: 0; }
+  .form-field { min-width: 0; }
+  .auth-btn.small, .cancel-btn, .add-btn { min-height: 46px; font-size: 13.5px; }
+  .form-actions { flex-direction: column; }
+  .form-actions .auth-btn, .form-actions .cancel-btn { width: 100%; justify-content: center; }
+  .table-btn { width: 40px; height: 40px; font-size: 13px; }
+  .data-form { padding: 16px; }
+
+  /* Admin tabs scroll sideways */
+  .admin-tabs-wrap { width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .admin-tabs-wrap::-webkit-scrollbar { display: none; }
+  .admin-tab { white-space: nowrap; min-height: 44px; flex: none; }
+
+  /* Misc components */
+  .youth-search { max-width: none; }
+  .cat-event-row { flex-wrap: wrap; }
+  .cat-event-row .cal-mark-btn { width: 100% !important; min-height: 44px; justify-content: center; }
+  .coy-x { min-width: 28px; min-height: 28px; }
+  .coy-add select, .coy-combo-input { min-height: 42px; }
+  .coy-add button { min-height: 42px; padding: 0 16px; }
+  .leader-check { padding: 11px 10px; }
+  .cal-nav-btn { width: 44px; height: 44px; }
+  .cal-nav { width: 100%; justify-content: space-between; }
+  .cal-month-display { flex: 1; font-size: 15px; }
+
+  /* Records page */
+  .rec-stats { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .rec-stat:last-child { grid-column: 1 / -1; }
+  .rec-quick { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
+  .rec-quick::-webkit-scrollbar { display: none; }
+  .rec-quick button { flex: none; min-height: 40px; white-space: nowrap; }
+  .rec-chip { min-height: 44px; }
+  .rec-mem-item { padding: 13px 12px; }
+  .rec-excel-btn { width: 100%; justify-content: center; min-height: 48px; }
+  .rec-toolbar { flex-direction: column; align-items: stretch; }
+  .rec-search input { min-height: 44px; }
+  .rec-pager button { min-width: 44px; height: 44px; }
+  #recGenerateBtn { width: 100%; min-height: 50px; }
+
+  /* Toasts sit clear of the bottom bar */
+  .toast-host { top: calc(8px + env(safe-area-inset-top)); }
+}
+
+/* ============================================================
+   PHONE  (≤ 640px) — tables become cards, calendar becomes an agenda
+   ============================================================ */
+@media (max-width: 640px) {
+
+  /* ---- Tables → cards ---- */
+  .table-wrap { border: none; overflow: visible; background: transparent; margin-top: 8px; }
+  .data-table.stack, .data-table.stack tbody { display: block; width: 100%; }
+  .data-table.stack thead { display: none; }
+  .data-table.stack tr {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
+    background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px;
+    padding: 14px; margin-bottom: 10px; box-shadow: var(--shadow-xs);
+  }
+  .data-table.stack tbody tr:hover { background: var(--surface); }
+  .data-table.stack td { display: block; padding: 0; border: none; min-width: 0; overflow-wrap: anywhere; font-size: 13.5px; }
+  .data-table.stack td::before {
+    content: attr(data-label); display: block; margin-bottom: 2px;
+    font-size: 9.5px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; color: var(--text-soft);
+  }
+  .data-table.stack td:not([data-label])::before { display: none; }
+  .data-table.stack td[colspan] { grid-column: 1 / -1; }
+  .data-table.stack:not(.stack-rec) td:first-child { grid-column: 1 / -1; font-size: 15px; font-weight: 700; }
+  .data-table.stack:not(.stack-rec) td:first-child::before { display: none; }
+  .data-table.stack td:has(.table-btn) { grid-column: 1 / -1; display: flex; gap: 8px; padding-top: 4px; border-top: 1px dashed var(--border); margin-top: 2px; }
+  .data-table.stack td:has(.table-btn)::before { display: none; }
+  .data-table.stack td .table-btn { margin-right: 0; }
+  .data-table.stack td .status-pill { margin: 0 4px 2px 0; }
+  .data-table.stack td.empty-msg { padding: 22px 6px; text-align: center; }
+  /* Records: member / event first */
+  .data-table.stack-rec td[data-label="Member"],
+  .data-table.stack-rec td[data-label="Event"] { order: -1; grid-column: 1 / -1; font-size: 15px; font-weight: 700; }
+  .data-table.stack-rec td[data-label="Member"]::before,
+  .data-table.stack-rec td[data-label="Event"]::before { display: none; }
+  .data-table.stack-rec td[data-label="Event"] ~ td[data-label="Member"] { order: -2; }
+
+  /* ---- Attendance marking cards ---- */
+  .data-table.att-cards tr[data-member-id] { grid-template-columns: 1fr auto; gap: 10px 12px; padding: 14px; }
+  .data-table.att-cards td[data-label="Name"] { grid-column: 1; font-size: 15.5px; }
+  .data-table.att-cards td[data-label="Group/Slot"] { grid-column: 2; grid-row: 1; align-self: center; font-size: 11px; color: var(--text-soft); font-weight: 600; text-align: right; }
+  .data-table.att-cards td[data-label="Group/Slot"]::before,
+  .data-table.att-cards td[data-label="Status"]::before { display: none; }
+  .data-table.att-cards td[data-label="Status"],
+  .data-table.att-cards td[data-label="Time in"],
+  .data-table.att-cards td[data-label="Reason"] { grid-column: 1 / -1; }
+  .data-table.att-cards td:has(.att-reason.hidden) { display: none; }
+  .data-table.att-cards input[type="time"] { width: 100%; min-height: 46px; }
+  .att-seg { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; gap: 3px; padding: 4px; }
+  .att-seg button { min-height: 46px; font-size: 13.5px; padding: 0 6px; }
+  .att-reason { min-width: 0; min-height: 46px; font-size: 16px; }
+  .att-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .att-quick-btn { justify-content: center; min-height: 46px; }
+  #attendancePanel .card-header > div:last-child { width: 100%; }
+  #attendanceEventSelect { flex: 1; min-width: 0 !important; min-height: 46px; width: 100%; }
+  /* Save bar stays reachable above the bottom nav */
+  #attendancePanel .form-actions, #eventAttPanel .form-actions {
+    position: sticky; bottom: calc(66px + env(safe-area-inset-bottom)); z-index: 5;
+    margin: 10px -16px -16px; padding: 14px 16px 16px;
+    background: linear-gradient(to top, var(--surface) 70%, rgba(255,255,255,0));
+    border-radius: 0 0 16px 16px;
+  }
+  #saveAttendanceBtn, #saveEventAttendanceBtn { min-height: 52px; font-size: 14.5px; box-shadow: var(--shadow-blue); }
+
+  /* ---- Calendar → weekend agenda ---- */
+  .cal-grid-header { display: none; }
+  .cal-grid { display: flex; flex-direction: column; gap: 10px; }
+  .cal-cell.cal-blank, .cal-cell.cal-weekday { display: none; }
+  .cal-cell.cal-weekend {
+    flex-direction: row; align-items: center; gap: 14px; min-height: 0; padding: 14px; border-radius: 16px;
+  }
+  .cal-weekend:not(:has(.cal-event-dot)):not(:has(.cal-no-event)) { display: none; }
+  .cal-day-num { flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 54px; font-size: 26px; line-height: 1; }
+  .cal-dow { font-size: 11px; }
+  .cal-events { flex: 1; gap: 6px; }
+  .cal-event-dot { padding: 10px 12px; font-size: 12.5px; border-radius: 10px; }
+  .cal-ev-time { display: inline !important; font-size: 13px; }
+  .cal-ev-pct { font-size: 11px; padding: 3px 9px; }
+  .cal-no-event { font-size: 12px; text-align: left; }
+  .cal-mark-btn { width: auto; margin: 0; min-height: 46px; padding: 0 16px; font-size: 12.5px; border-radius: 10px; }
+  .cal-today { box-shadow: 0 0 0 3px rgba(37,99,235,.18) !important; }
+}
+
+/* ============================================================
+   AUTH PAGES
+   ============================================================ */
+.auth-body { min-height: 100vh; min-height: 100dvh; }
+.auth-form input, .auth-form select { min-height: 48px; }
+.auth-btn { min-height: 50px; }
+.auth-tab { min-height: 44px; }
+a.auth-logo { text-decoration: none; transition: transform var(--dur) var(--ease); }
+a.auth-logo:hover { transform: translateY(-1px); }
+@media (max-width: 480px) {
+  .auth-body { align-items: flex-start; padding: calc(24px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom)); }
+  .auth-card { padding: 28px 20px; border-radius: 24px; }
+  .auth-form input, .auth-form select { font-size: 16px; }
+}
