@@ -32,6 +32,7 @@ function pym_db_creds() {
 
 /** True when the connection must use TLS. */
 function pym_ssl_required($host) {
+    if (stripos($host, 'tidbcloud') !== false) return true;
     $env = pym_env('DB_SSL');
     $remote = !in_array($host, ['localhost', '127.0.0.1', '::1'], true);
     return ($env === null) ? $remote : !in_array(strtolower($env), ['0', 'false', 'off', 'no'], true);
@@ -43,6 +44,15 @@ function pym_ssl_attempts($host) {
 
     $attempts = [];
     $files = [];
+    // Bundled CA first (works on Vercel where no system CA exists)
+    $bundled = __DIR__ . '/cacert.pem';
+    if (@is_readable($bundled)) {
+        $attempts[] = [PDO::MYSQL_ATTR_SSL_CA => $bundled, PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => true];
+        $attempts[] = [PDO::MYSQL_ATTR_SSL_CA => $bundled, PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false];
+    }
+    $tmp = sys_get_temp_dir() . '/cacert.pem';
+    if (@is_readable($bundled) && !@is_file($tmp)) @copy($bundled, $tmp);
+    if (@is_readable($tmp)) $attempts[] = [PDO::MYSQL_ATTR_SSL_CA => $tmp, PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false];
     $custom = pym_env('DB_SSL_CA');
     if ($custom) { $files[] = $custom; $files[] = __DIR__ . '/' . ltrim($custom, '/'); }
     $files[] = __DIR__ . '/cacert.pem';
