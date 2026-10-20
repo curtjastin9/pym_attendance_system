@@ -30,28 +30,41 @@ function pym_db_creds() {
     return [$DB_HOST, $DB_NAME, $DB_USER, $DB_PASS, $DB_CHARSET, $DB_PORT];
 }
 
-/** List of SSL option sets to try, in order. */
-function pym_ssl_attempts($host) {
+/** True when the connection must use TLS. */
+function pym_ssl_required($host) {
     $env = pym_env('DB_SSL');
     $remote = !in_array($host, ['localhost', '127.0.0.1', '::1'], true);
-    $on = ($env === null) ? $remote : !in_array(strtolower($env), ['0', 'false', 'off', 'no'], true);
-    if (!$on) return [[]];
+    return ($env === null) ? $remote : !in_array(strtolower($env), ['0', 'false', 'off', 'no'], true);
+}
+
+/** List of SSL option sets to try, in order. */
+function pym_ssl_attempts($host) {
+    if (!pym_ssl_required($host)) return [[]];
 
     $attempts = [];
     $files = [];
     $custom = pym_env('DB_SSL_CA');
     if ($custom) { $files[] = $custom; $files[] = __DIR__ . '/' . ltrim($custom, '/'); }
+    $files[] = __DIR__ . '/cacert.pem';
+    if (function_exists('openssl_get_cert_locations')) {
+        $loc = @openssl_get_cert_locations();
+        if (is_array($loc)) {
+            if (!empty($loc['default_cert_file'])) $files[] = $loc['default_cert_file'];
+            if (!empty($loc['default_cert_dir']))  $dirs[] = $loc['default_cert_dir'];
+        }
+    }
     $files = array_merge($files, [
         '/etc/pki/tls/certs/ca-bundle.crt',
         '/etc/ssl/certs/ca-certificates.crt',
         '/etc/pki/tls/cert.pem',
         '/etc/ssl/cert.pem',
         '/etc/ssl/ca-bundle.pem',
+        '/opt/lib/ca-bundle.crt',
+        '/var/task/ca-bundle.crt',
     ]);
     foreach ($files as $f) {
-        if (@is_readable($f)) {
+        if (@is_readable($f) && @is_file($f)) {
             $attempts[] = [PDO::MYSQL_ATTR_SSL_CA => $f, PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false];
-            break;
         }
     }
     foreach (['/etc/ssl/certs', '/etc/pki/tls/certs'] as $d) {
@@ -60,7 +73,9 @@ function pym_ssl_attempts($host) {
             break;
         }
     }
-    $attempts[] = []; // last resort: no SSL
+    // Forces TLS on even when no CA bundle exists on the server (encrypted, no certificate check)
+    $attempts[] = [PDO::MYSQL_ATTR_SSL_CIPHER => 'DEFAULT', PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false];
+    $attempts[] = [PDO::MYSQL_ATTR_SSL_CIPHER => 'ECDHE-RSA-AES128-GCM-SHA256', PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false];
     return $attempts;
 }
 
@@ -77,16 +92,19 @@ function pym_connect() {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+08:00'",
     ];
     $last = null;
-    foreach (pym_ssl_attempts($h) as $ssl) {
+    $errs = [];
+    foreach (pym_ssl_attempts($h) as $i => $ssl) {
         try {
-            $pdo = new PDO($dsn, $u, $p, $base + $ssl);
+            $pdo = new PDO($dsn, $u, $p, $ssl + $base);
             $GLOBALS['PYM_PDO'] = $pdo;
             return $pdo;
         } catch (Throwable $e) {
             $last = $e;
+            $errs[] = '#' . ($i + 1) . ' ' . $e->getMessage();
             error_log('PYM DB attempt failed: ' . $e->getMessage());
         }
     }
+    if (count($errs) > 1) throw new RuntimeException(implode(' || ', $errs));
     throw $last ?: new RuntimeException('Database connection failed.');
 }
 
