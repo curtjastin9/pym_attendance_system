@@ -1,0 +1,12 @@
+{
+  "builds": [
+    { "src": "*.php", "use": "vercel-php@0.7.3" },
+    { "src": "*.{css,js,png,ico,jpg,svg}", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/", "dest": "/home.php" },
+    { "src": "/(index|login)\\.html", "dest": "/home.php" },
+    { "src": "/(.*\\.php)", "dest": "/$1" },
+    { "handle": "filesystem" }
+  ]
+}

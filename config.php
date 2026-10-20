@@ -2,30 +2,20 @@
 /**
  * Database connection configuration.
  *
- * LOCAL (XAMPP): works as-is with the defaults below.
- * LIVE SERVER:   copy config.local.php.example to config.local.php and put your
- *                real database name / user / password there. config.local.php
- *                overrides the defaults, so you never edit this file on the host.
+ * LOCAL (XAMPP): works as-is with the defaults.
+ * LIVE / VERCEL: set environment variables DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS
+ *                (or create config.local.php). See session.php -> pym_db_creds().
  */
 require_once __DIR__ . '/session.php';
 
-$DB_HOST    = 'localhost';
-$DB_NAME    = 'pym_attendance';
-$DB_USER    = 'root';
-$DB_PASS    = '';
-$DB_CHARSET = 'utf8mb4';
+[$DB_HOST, $DB_NAME, $DB_USER, $DB_PASS, $DB_CHARSET, $DB_PORT] = pym_db_creds();
 
-if (file_exists(__DIR__ . '/config.local.php')) {
-    require __DIR__ . '/config.local.php';
-}
-
-$dsn = "mysql:host={$DB_HOST};dbname={$DB_NAME};charset={$DB_CHARSET}";
+$dsn = "mysql:host={$DB_HOST};port={$DB_PORT};dbname={$DB_NAME};charset={$DB_CHARSET}";
 
 $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     PDO::ATTR_EMULATE_PREPARES   => false,
-    // Keep MySQL timestamps (created_at, etc.) in Philippine time too
     PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+08:00'",
 ];
 
