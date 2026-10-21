@@ -17,16 +17,23 @@ function requireSecretariat() {
     if (!isset($_SESSION['user_id'])) respond(false, 'Your session has expired. Please log in again.');
     if (($_SESSION['role'] ?? '') !== 'secretariat') respond(false, 'You do not have permission to perform this action.');
 }
+function nextId($pdo, $table) {
+    return (int)$pdo->query("SELECT COALESCE(MAX(id),0) FROM `$table`")->fetchColumn() + 1;
+}
 
 function ensureAccountSchema($pdo) {
-    if (!empty($_SESSION['acct_schema_ok'])) return;
-    try {
-        foreach (['email', 'email_key'] as $c) {
+    // Each step is independent so one failure never blocks the others
+    foreach (['email', 'email_key'] as $c) {
+        try {
             if (!$pdo->query("SHOW COLUMNS FROM `users` LIKE '$c'")->fetch())
                 $pdo->exec("ALTER TABLE `users` ADD COLUMN `$c` VARCHAR(150) DEFAULT NULL");
-        }
+        } catch (Throwable $e) { error_log("account col $c: " . $e->getMessage()); }
+    }
+    try {
         if (!$pdo->query("SHOW INDEX FROM `users` WHERE Key_name = 'uniq_email_key'")->fetch())
             $pdo->exec("ALTER TABLE `users` ADD UNIQUE KEY `uniq_email_key` (`email_key`)");
+    } catch (Throwable $e) { error_log('account idx: ' . $e->getMessage()); }
+    try {
         $pdo->exec("CREATE TABLE IF NOT EXISTS `email_codes` (
             `id` int(11) NOT NULL AUTO_INCREMENT,
             `email_key` varchar(150) NOT NULL,
@@ -39,8 +46,7 @@ function ensureAccountSchema($pdo) {
             PRIMARY KEY (`id`),
             UNIQUE KEY `uniq_ep` (`email_key`,`purpose`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        $_SESSION['acct_schema_ok'] = 1;
-    } catch (Throwable $e) { error_log('account schema: ' . $e->getMessage()); }
+    } catch (Throwable $e) { error_log('account codes: ' . $e->getMessage()); }
 }
 
 /** Gmail only. One Gmail = one account (dots and +tags ignored). Returns [display, key] or null. */
@@ -157,11 +163,14 @@ switch ($action) {
         if ($s->fetch()) { dropCode($pdo, $r['id']); respond(false, 'That username was just taken. Please register again with another username.'); }
         if (emailTaken($pdo, $key)) { dropCode($pdo, $r['id']); respond(false, 'This Gmail is already registered.'); }
         try {
-            $pdo->prepare("INSERT INTO users (username, password, full_name, role, status, email, email_key) VALUES (?,?,?,?,'pending',?,?)")
-                ->execute([$p['username'], $p['hash'], $p['full_name'], $p['role'], $p['email'], $key]);
+            // Explicit id works even when the table has no AUTO_INCREMENT (TiDB)
+            $pdo->prepare("INSERT INTO users (id, username, password, full_name, role, status, email, email_key) VALUES (?,?,?,?,?,'pending',?,?)")
+                ->execute([nextId($pdo, 'users'), $p['username'], $p['hash'], $p['full_name'], $p['role'], $p['email'], $key]);
         } catch (Throwable $e) {
             error_log('register_verify: ' . $e->getMessage());
-            respond(false, 'Could not create the account. The username or Gmail may already be in use.');
+            $m = 'Could not create the account. Please try again.';
+            if (pym_env('DB_HIDE_ERRORS') !== '1') $m .= ' [' . $e->getMessage() . ']';
+            respond(false, $m);
         }
         dropCode($pdo, $r['id']);
         respond(true, 'Email verified! Your account is now waiting for Secretariat approval.');
