@@ -165,3 +165,21 @@ if (session_status() === PHP_SESSION_NONE) {
     }
     session_start();
 }
+
+/* ---- Account features ----
+ * 1) Old one-step self-registration is closed (registration now needs the emailed code).
+ * 2) The Admin "Manage User Accounts" script is added to the dashboard page. */
+(function () {
+    $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
+    $file = basename($_SERVER['SCRIPT_FILENAME'] ?? '') ?: basename($path);
+    if (($file === 'api.php' || substr($path, -8) === '/api.php') && (($_GET['action'] ?? '') === 'register')) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'Please register from the login page (email verification is required).', 'data' => null]);
+        exit;
+    }
+    if ($file === 'index.php' || substr($path, -10) === '/index.php') {
+        ob_start(function ($html) {
+            return preg_replace('~</body>~i', '<script src="admin_accounts.js"></script></body>', $html, 1);
+        });
+    }
+})();

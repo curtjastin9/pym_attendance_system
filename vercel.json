@@ -10,6 +10,7 @@
     { "src": "api_records.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
     { "src": "api_coy.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
     { "src": "api_attendance.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
+    { "src": "api_account.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
     { "src": "fix_db.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
     { "src": "**/*.png", "use": "@vercel/static" },
     { "src": "**/*.jpg", "use": "@vercel/static" },
@@ -25,8 +26,8 @@
   "routes": [
     { "src": "/", "dest": "/home.php" },
     { "src": "/(index|login)\\.html", "dest": "/home.php" },
-    { "src": "/(home|index|login|public|api|api_public|api_records|api_coy|api_attendance|fix_db)\\.php", "dest": "/$1.php" },
-    { "src": "/(session|config|security|attendance_schema)\\.php", "status": 404, "dest": "/home.php" },
+    { "src": "/(home|index|login|public|api|api_public|api_records|api_coy|api_attendance|api_account|fix_db)\\.php", "dest": "/$1.php" },
+    { "src": "/(session|config|security|attendance_schema|mail)\\.php", "status": 404, "dest": "/home.php" },
     { "handle": "filesystem" },
     { "src": "/logo\\.png", "dest": "/LOGO.png" }
   ]
