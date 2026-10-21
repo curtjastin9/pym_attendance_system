@@ -2,7 +2,6 @@
 require_once __DIR__ . '/session.php';
 header('Content-Type: application/json');
 require_once 'config.php';
-require_once 'attendance_schema.php';
 
 $action = $_GET['action'] ?? '';
 $input  = json_decode(file_get_contents('php://input'), true);
@@ -37,6 +36,7 @@ function cleanRecord($r) {
     if (!in_array($status, ['present', 'absent', 'excused'], true)) $status = 'absent';
     $time = $r['time_in'] ?? null;
     if ($time === '') $time = null;
+    if ($time !== null) $time = substr((string)$time, 0, 5) . ':00';
     $reason = trim((string)($r['reason'] ?? ''));
     if (function_exists('mb_substr')) $reason = mb_substr($reason, 0, 255); else $reason = substr($reason, 0, 255);
     if ($status === 'present' && $time === null) $time = date('H:i:s');
@@ -46,9 +46,6 @@ function cleanRecord($r) {
 }
 
 requireLogin();
-ensureExcusedSchema($pdo);
-require_once 'security.php';
-ensureSecuritySchema($pdo);
 
 function checkSlotAccess($pdo, $slot_id, $date) {
     if (!$slot_id || !$date) respond(false, 'Please select a slot and date.');
@@ -104,7 +101,8 @@ switch ($action) {
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            respond(false, 'Failed to save attendance. Please try again.');
+            error_log('save_slot_attendance: ' . $e->getMessage());
+            respond(false, 'Failed to save attendance: ' . $e->getMessage());
         }
         respond(true, 'Attendance saved successfully.');
     }
@@ -154,7 +152,8 @@ switch ($action) {
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            respond(false, 'Failed to save attendance. Please try again.');
+            error_log('save_event_att: ' . $e->getMessage());
+            respond(false, 'Failed to save attendance: ' . $e->getMessage());
         }
         respond(true, 'Attendance saved successfully.');
     }

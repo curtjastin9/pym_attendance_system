@@ -1,6 +1,7 @@
 /* ============================================================
-   PYM — Excused status + reason for attendance marking
+   PYM — Excused status with a REASON popup
    Load AFTER app.js, coy.js and records.js.
+   Present / Absent: no reason.  Excused: popup asks for the reason.
    ============================================================ */
 
 (function injectExcusedStyles() {
@@ -11,12 +12,24 @@
   .att-seg button.active[data-s="present"]{background:var(--emerald);color:#fff;box-shadow:var(--shadow-green)}
   .att-seg button.active[data-s="absent"]{background:var(--crimson);color:#fff;box-shadow:0 4px 12px rgba(220,38,38,.28)}
   .att-seg button.active[data-s="excused"]{background:var(--amber);color:#fff;box-shadow:0 4px 12px rgba(217,119,6,.30)}
-  .att-reason{width:100%;min-width:220px;border:1.5px solid #FCD34D;background:#FFFBEB;border-radius:var(--radius-sm);padding:8px 11px;font-size:12.5px;outline:none}
-  .att-reason:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12)}
-  .att-reason.invalid{border-color:var(--crimson);background:var(--crimson-pale)}
+  .att-reason{width:100%;min-width:220px;border:1.5px solid #FCD34D;background:#FFFBEB;border-radius:var(--radius-sm);padding:8px 11px;font-size:12.5px;outline:none;cursor:pointer}
+  .att-reason:hover{border-color:var(--amber)}
   .status-pill.excused{background:var(--amber-pale);color:var(--amber)}
   .status-dot.excused{background:var(--amber)}
   .att-quick-btn.excused-note{cursor:default;background:var(--amber-pale);color:var(--amber);border-color:#FCD34D}
+
+  .rsn-back{position:fixed;inset:0;z-index:10000;background:rgba(8,16,31,.6);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px}
+  .rsn-box{background:#fff;border-radius:18px;width:100%;max-width:420px;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.4);border-top:4px solid var(--amber)}
+  .rsn-box h4{font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;font-weight:800;margin-bottom:4px;color:var(--text-primary)}
+  .rsn-box p{font-size:12.5px;color:var(--text-soft);margin-bottom:12px}
+  .rsn-box p b{color:var(--text-primary)}
+  .rsn-box textarea{width:100%;min-height:96px;resize:vertical;border:1.5px solid #FCD34D;background:#FFFBEB;border-radius:10px;padding:11px 13px;font-size:16px;font-family:inherit;outline:none;color:var(--text-primary)}
+  .rsn-box textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.14)}
+  .rsn-box textarea.invalid{border-color:var(--crimson);background:var(--crimson-pale)}
+  .rsn-err{font-size:12px;color:var(--crimson);font-weight:600;min-height:16px;margin-top:6px}
+  .rsn-actions{display:flex;gap:10px;margin-top:10px}
+  .rsn-actions button{flex:1;min-height:46px;border-radius:10px;font-size:14px;font-weight:700;border:1.5px solid var(--border);background:#fff;color:var(--text-mid)}
+  .rsn-actions button.ok{background:var(--amber);border-color:var(--amber);color:#fff;box-shadow:0 4px 12px rgba(217,119,6,.30)}
   `;
   const el = document.createElement('style');
   el.textContent = css;
@@ -36,6 +49,46 @@ async function attApi(action, payload = null) {
   }
 }
 
+/* ---------- Reason popup ---------- */
+function attAskReason(name, initial) {
+  return new Promise(resolve => {
+    const back = document.createElement('div');
+    back.className = 'rsn-back';
+    back.innerHTML = `
+      <div class="rsn-box" role="dialog" aria-modal="true" aria-label="Excused reason">
+        <h4>Reason for Excused</h4>
+        <p>Why is <b>${escapeHtml(name || 'this member')}</b> excused?</p>
+        <textarea maxlength="255" placeholder="Type the reason..."></textarea>
+        <div class="rsn-err"></div>
+        <div class="rsn-actions">
+          <button type="button" class="cancel">Cancel</button>
+          <button type="button" class="ok">Save Reason</button>
+        </div>
+      </div>`;
+    document.body.appendChild(back);
+    const ta = back.querySelector('textarea');
+    const err = back.querySelector('.rsn-err');
+    ta.value = initial || '';
+    setTimeout(() => ta.focus(), 50);
+
+    const done = (v) => { document.removeEventListener('keydown', onKey, true); back.remove(); resolve(v); };
+    const submit = () => {
+      const v = ta.value.trim();
+      if (!v) { ta.classList.add('invalid'); err.textContent = 'Please type the reason.'; ta.focus(); return; }
+      done(v);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); done(null); }
+      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    ta.addEventListener('input', () => { ta.classList.remove('invalid'); err.textContent = ''; });
+    back.querySelector('.cancel').addEventListener('click', () => done(null));
+    back.querySelector('.ok').addEventListener('click', submit);
+    back.addEventListener('mousedown', (e) => { if (e.target === back) done(null); });
+  });
+}
+
 function attEnsureReasonHeader(tbody) {
   const tr = tbody.closest('table').querySelector('thead tr');
   if (tr && !tr.querySelector('.reason-th')) {
@@ -52,28 +105,37 @@ function attRowHtml(m) {
   const seg = ['present', 'absent', 'excused'].map(s =>
     `<button type="button" data-s="${s}" class="${s === st ? 'active' : ''}">${s.charAt(0).toUpperCase() + s.slice(1)}</button>`).join('');
   return `
-    <tr data-member-id="${m.member_id}" data-status="${st}">
+    <tr data-member-id="${m.member_id}" data-status="${st}" data-name="${escapeHtml(m.full_name)}">
       <td>${escapeHtml(m.full_name)}</td>
       <td>${escapeHtml(m.slot_name || '—')}</td>
       <td><div class="att-seg">${seg}</div></td>
       <td><input type="time" value="${timeVal}" ${st === 'present' ? '' : 'disabled'}/></td>
-      <td><input type="text" class="att-reason ${st === 'excused' ? '' : 'hidden'}" maxlength="255" placeholder="Type the reason (required)" value="${escapeHtml(m.reason || '')}"/></td>
+      <td><input type="text" class="att-reason ${st === 'excused' ? '' : 'hidden'}" readonly maxlength="255" title="Tap to edit the reason" placeholder="Tap to add reason" value="${escapeHtml(m.reason || '')}"/></td>
     </tr>`;
 }
 
-function attSetRow(row, s) {
-  row.dataset.status = s;
-  row.querySelectorAll('.att-seg button').forEach(b => b.classList.toggle('active', b.dataset.s === s));
+async function attSetRow(row, s) {
   const ti = row.querySelector('input[type="time"]');
   const rs = row.querySelector('.att-reason');
-  if (s === 'present') {
-    ti.disabled = false;
-    if (!ti.value) ti.value = new Date().toTimeString().substring(0, 5);
-  } else {
+
+  if (s === 'excused') {
+    const reason = await attAskReason(row.dataset.name, rs.value);
+    if (reason === null) return; // cancelled → keep previous status
+    rs.value = reason;
+    rs.classList.remove('hidden');
     ti.value = ''; ti.disabled = true;
+  } else {
+    rs.classList.add('hidden');
+    rs.value = '';
+    if (s === 'present') {
+      ti.disabled = false;
+      if (!ti.value) ti.value = new Date().toTimeString().substring(0, 5);
+    } else {
+      ti.value = ''; ti.disabled = true;
+    }
   }
-  if (s === 'excused') { rs.classList.remove('hidden'); rs.focus(); }
-  else { rs.classList.add('hidden'); rs.value = ''; rs.classList.remove('invalid'); }
+  row.dataset.status = s;
+  row.querySelectorAll('.att-seg button').forEach(b => b.classList.toggle('active', b.dataset.s === s));
 }
 
 function attCollect(tbody) {
@@ -90,11 +152,10 @@ function attCollect(tbody) {
     });
   });
   if (bad) {
-    const inp = bad.querySelector('.att-reason');
-    inp.classList.add('invalid');
-    inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    inp.focus();
-    alert('Please type the reason for every member marked Excused.');
+    bad.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    attAskReason(bad.dataset.name, '').then(r => {
+      if (r) { const i = bad.querySelector('.att-reason'); i.value = r; i.classList.remove('hidden'); }
+    });
     return null;
   }
   return records;
@@ -156,12 +217,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const tbody = document.getElementById(id);
     if (!tbody) return;
     attEnsureReasonHeader(tbody);
-    tbody.addEventListener('click', (e) => {
+    tbody.addEventListener('click', async (e) => {
       const b = e.target.closest('.att-seg button');
-      if (b) attSetRow(b.closest('tr'), b.dataset.s);
-    });
-    tbody.addEventListener('input', (e) => {
-      if (e.target.classList.contains('att-reason')) e.target.classList.remove('invalid');
+      if (b) { await attSetRow(b.closest('tr'), b.dataset.s); return; }
+      const r = e.target.closest('.att-reason');
+      if (r && !r.classList.contains('hidden')) {
+        const row = r.closest('tr');
+        const v = await attAskReason(row.dataset.name, r.value);
+        if (v !== null) r.value = v;
+      }
     });
   });
 
