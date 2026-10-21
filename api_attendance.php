@@ -44,6 +44,10 @@ function cleanRecord($r) {
     if ($status !== 'excused') $reason = null;
     return [(int)($r['member_id'] ?? 0), $status, $time, $reason];
 }
+// Works even when the table has no AUTO_INCREMENT on id (TiDB fix)
+function nextId($pdo, $table) {
+    return (int)$pdo->query("SELECT COALESCE(MAX(id),0) FROM `$table`")->fetchColumn() + 1;
+}
 
 requireLogin();
 
@@ -93,11 +97,12 @@ switch ($action) {
             $clean[] = [$mid, $status, $time, $reason];
         }
 
-        $ins = $pdo->prepare("INSERT INTO attendance (member_id, slot_id, att_date, status, time_in, reason) VALUES (?,?,?,?,?,?)
+        $ins = $pdo->prepare("INSERT INTO attendance (id, member_id, slot_id, att_date, status, time_in, reason) VALUES (?,?,?,?,?,?,?)
             ON DUPLICATE KEY UPDATE status = VALUES(status), time_in = VALUES(time_in), reason = VALUES(reason)");
         try {
             $pdo->beginTransaction();
-            foreach ($clean as [$mid, $status, $time, $reason]) $ins->execute([$mid, $slot_id, $date, $status, $time, $reason]);
+            $id = nextId($pdo, 'attendance');
+            foreach ($clean as [$mid, $status, $time, $reason]) $ins->execute([$id++, $mid, $slot_id, $date, $status, $time, $reason]);
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -144,11 +149,12 @@ switch ($action) {
             $clean[] = [$mid, $status, $time, $reason];
         }
 
-        $ins = $pdo->prepare("INSERT INTO event_attendance (member_id, event_id, status, time_in, reason) VALUES (?,?,?,?,?)
+        $ins = $pdo->prepare("INSERT INTO event_attendance (id, member_id, event_id, status, time_in, reason) VALUES (?,?,?,?,?,?)
             ON DUPLICATE KEY UPDATE status = VALUES(status), time_in = VALUES(time_in), reason = VALUES(reason)");
         try {
             $pdo->beginTransaction();
-            foreach ($clean as [$mid, $status, $time, $reason]) $ins->execute([$mid, $event_id, $status, $time, $reason]);
+            $id = nextId($pdo, 'event_attendance');
+            foreach ($clean as [$mid, $status, $time, $reason]) $ins->execute([$id++, $mid, $event_id, $status, $time, $reason]);
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
