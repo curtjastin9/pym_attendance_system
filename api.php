@@ -22,6 +22,16 @@ function nextId($pdo, $table) {
     return (int)$pdo->query("SELECT COALESCE(MAX(id),0) FROM `$table`")->fetchColumn() + 1;
 }
 
+function purgeYouth($pdo, $ids) {
+    $ids = array_values(array_filter(array_map('intval', (array)$ids)));
+    if (!$ids) return;
+    $ph = implode(',', array_fill(0, count($ids), '?'));
+    foreach (['attendance', 'event_attendance', 'coy_holders', 'coy_committee_members'] as $t) {
+        try { $pdo->prepare("DELETE FROM `$t` WHERE member_id IN ($ph)")->execute($ids); } catch (Throwable $e) { error_log("purge $t: " . $e->getMessage()); }
+    }
+    $pdo->prepare("DELETE FROM youth_members WHERE id IN ($ph)")->execute($ids);
+}
+
 function currentUser() {
     if (!isset($_SESSION['user_id'])) return null;
     return [
@@ -277,9 +287,15 @@ switch ($action) {
         requireLogin();
         $id = $input['id'] ?? 0;
         if (getLeaderSlotId($pdo) !== null) respond(false, 'Only the Secretariat can delete members. Use remove from slot instead.');
-        $stmt = $pdo->prepare("DELETE FROM youth_members WHERE id=?");
-        $stmt->execute([$id]);
-        respond(true, 'Member deleted.');
+        try {
+            $pdo->beginTransaction();
+            purgeYouth($pdo, [$id]);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            respond(false, 'Failed to delete member: ' . $e->getMessage());
+        }
+        respond(true, 'Member and all their records deleted.');
     }
 
     case 'get_events': {
@@ -312,6 +328,7 @@ switch ($action) {
     case 'delete_event': {
         requireSecretariat();
         $id = $input['id'] ?? 0;
+        $pdo->prepare("DELETE FROM event_attendance WHERE event_id=?")->execute([$id]);
         $stmt = $pdo->prepare("DELETE FROM events WHERE id=?");
         $stmt->execute([$id]);
         respond(true, 'Event deleted.');
@@ -489,6 +506,22 @@ switch ($action) {
 
         $leaderSlotId = getLeaderSlotId($pdo);
 
+        $catByDate = [];
+        if ($leaderSlotId === null) {
+            try {
+                $from = date('Y-m-d', $firstDay); $to = date('Y-m-t', $firstDay);
+                $st = $pdo->prepare("SELECT e.id, e.title, e.event_date, e.event_time, e.location, c.name AS category,
+                    (SELECT COUNT(*) FROM event_attendance a WHERE a.event_id = e.id AND a.status='present') AS present
+                    FROM events e JOIN event_categories c ON c.id = e.category_id
+                    WHERE e.category_id IS NOT NULL AND e.event_date BETWEEN ? AND ? ORDER BY e.event_time ASC");
+                $st->execute([$from, $to]);
+                $totalActive = (int)$pdo->query("SELECT COUNT(*) FROM youth_members WHERE status='active'")->fetchColumn();
+                foreach ($st->fetchAll() as $ce) {
+                    $catByDate[$ce['event_date']][] = ['id'=>$ce['id'],'kind'=>'event','title'=>$ce['title'],'time'=>$ce['event_time'],'color'=>'#D97706','category'=>$ce['category'],'location'=>$ce['location'],'present'=>(int)$ce['present'],'total'=>$totalActive];
+                }
+            } catch (Throwable $e) { error_log('cal events: ' . $e->getMessage()); }
+        }
+
         $calendar = [];
         $startDow = (int)date('w', $firstDay);
         for ($i = 0; $i < $startDow; $i++) $calendar[] = null;
@@ -516,6 +549,7 @@ switch ($action) {
                 $slotSummary[] = ['id'=>$slot['id'],'title'=>$slot['name'],'time'=>$slot['slot_time'],'color'=>$slot['color'],'present'=>$present,'total'=>$total];
             }
 
+            foreach ($catByDate[$dateStr] ?? [] as $ce) $slotSummary[] = $ce;
             $calendar[] = ['day'=>$d,'date'=>$dateStr,'dow'=>$dow,'is_weekend'=>$isWeekend,'events'=>$slotSummary,'is_today'=>($dateStr===date('Y-m-d'))];
         }
 
@@ -696,9 +730,30 @@ switch ($action) {
         requireSecretariat();
         $id = $input['id'] ?? 0;
         if ($id == $_SESSION['user_id']) respond(false, 'You cannot delete your own account.');
-        $stmt = $pdo->prepare("DELETE FROM users WHERE id=?");
+        $id = (int)$id;
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE id=?");
         $stmt->execute([$id]);
-        respond(true, 'User deleted.');
+        $u = $stmt->fetch();
+        if (!$u) respond(false, 'User not found.');
+        try {
+            $pdo->beginTransaction();
+            $pdo->prepare("DELETE FROM slot_leaders WHERE user_id=?")->execute([$id]);
+            $pdo->prepare("UPDATE groups_slots SET leader_id = NULL WHERE leader_id=?")->execute([$id]);
+            if (!empty($u['email_key'])) {
+                try { $pdo->prepare("DELETE FROM email_codes WHERE email_key=?")->execute([$u['email_key']]); } catch (Throwable $e) {}
+            }
+            try { $pdo->prepare("DELETE FROM rate_limits WHERE bucket='login' AND rkey LIKE ?")->execute(['%|' . strtolower($u['username'])]); } catch (Throwable $e) {}
+            try { $pdo->prepare("DELETE FROM php_sessions WHERE data LIKE ?")->execute(['%user_id|i:' . $id . ';%']); } catch (Throwable $e) {}
+            $m = $pdo->prepare("SELECT id FROM youth_members WHERE LOWER(TRIM(full_name)) = ?");
+            $m->execute([strtolower(trim($u['full_name']))]);
+            purgeYouth($pdo, $m->fetchAll(PDO::FETCH_COLUMN));
+            $pdo->prepare("DELETE FROM users WHERE id=?")->execute([$id]);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            respond(false, 'Failed to delete user: ' . $e->getMessage());
+        }
+        respond(true, 'User and all their records deleted.');
     }
 
     case 'get_categories': {
@@ -736,6 +791,8 @@ switch ($action) {
         $c = $stmt->fetch();
         if (!$c) respond(false, 'Category not found.');
         if ((int)$c['is_system'] === 1) respond(false, 'The Normal Serve category cannot be deleted.');
+        $pdo->prepare("DELETE FROM event_attendance WHERE event_id IN (SELECT id FROM events WHERE category_id = ?)")->execute([$id]);
+        $pdo->prepare("DELETE FROM events WHERE category_id = ?")->execute([$id]);
         $pdo->prepare("DELETE FROM event_categories WHERE id = ?")->execute([$id]);
         respond(true, 'Category and its events deleted.');
     }

@@ -260,5 +260,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const res = await attApi('save_event_att', { event_id: CURRENT_EVENT_ID, records });
     btn.disabled = false;
     alert(res.message);
+    if (res.success) loadCalendar();
   });
 });

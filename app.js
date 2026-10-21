@@ -3,6 +3,7 @@
    ============================================================ */
 
 const API = 'api.php';
+(function(){const st=document.createElement('style');st.textContent='.cal-cat-dot{background:#FEF3C7!important;border-color:#FCD34D!important}.cal-cat-dot .cal-cat-title{font-weight:700;color:#92400E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}.cal-cat-dot:hover{background:#D97706!important;border-color:#D97706!important}.cal-cat-dot:hover .cal-cat-title{color:#fff}';document.head.appendChild(st);})();
 
 async function apiCall(action, payload = null) {
   try {
@@ -751,23 +752,25 @@ async function loadCalendar() {
     const cell = document.createElement('div');
     const isToday = day.is_today;
     const isWeekend = day.is_weekend;
+    const catEvs = day.events.filter(e => e.kind === 'event');
+    const slotEvs = day.events.filter(e => e.kind !== 'event');
+    const showFull = isWeekend || catEvs.length > 0;
     cell.className = 'cal-cell' +
-      (isWeekend ? ' cal-weekend' : '') +
-      (isToday   ? ' cal-today'   : '') +
-      (!isWeekend ? ' cal-weekday' : '');
+      (showFull ? ' cal-weekend' : ' cal-weekday') +
+      (isToday   ? ' cal-today'   : '');
 
     const dowName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day.dow];
 
     // A day is "active" for a user when:
     //   - backend returned slot events for it (always true for secretariat, filtered for leaders), OR
     //   - this is a leader whose assigned slot DOW matches this calendar cell's DOW
-    const hasEventsForUser = day.events.length > 0;
+    const hasEventsForUser = slotEvs.length > 0;
     const isLeaderDay = CURRENT_USER.role === 'leader' && mySlotDow !== null && day.dow === mySlotDow;
     const isActiveDay = isWeekend && (hasEventsForUser || isLeaderDay);
 
     let evHtml = '';
     if (hasEventsForUser) {
-      evHtml = day.events.map(ev => {
+      evHtml = slotEvs.map(ev => {
         const pct = ev.total > 0 ? Math.round((ev.present/ev.total)*100) : 0;
         return `<div class="cal-event-dot" data-event-id="${ev.id}" data-date="${day.date}" title="${escapeHtml(ev.title)} — ${ev.present}/${ev.total}">
           <span class="cal-ev-time">${ev.time ? formatTime(ev.time) : ''}</span>
@@ -781,6 +784,12 @@ async function loadCalendar() {
       }
     }
 
+    catEvs.forEach(ev => {
+      CAT_EVENT_MAP[ev.id] = { ev: { title: ev.title, event_date: day.date, event_time: ev.time }, cat: ev.category };
+      const cp = ev.total > 0 ? Math.round((ev.present / ev.total) * 100) : 0;
+      evHtml += `<div class="cal-event-dot cal-cat-dot" data-cat-id="${ev.id}" title="${escapeHtml(ev.category)} — ${escapeHtml(ev.title)} — ${ev.present}/${ev.total}"><span class="cal-cat-title">${escapeHtml(ev.title)}</span><span class="cal-ev-pct ${cp>=80?'hi':cp>=50?'mid':'lo'}">${cp}%</span></div>`;
+    });
+
     cell.innerHTML = `
       <div class="cal-day-num ${isToday ? 'today-num' : ''}">${day.day}<span class="cal-dow">${dowName}</span></div>
       <div class="cal-events">${evHtml}</div>
@@ -792,11 +801,12 @@ async function loadCalendar() {
       if (markBtn) {
         markBtn.addEventListener('click', (e) => { e.stopPropagation(); openAttendancePanel(day.date); });
       }
-      cell.querySelectorAll('.cal-event-dot').forEach(dot => {
+      cell.querySelectorAll('.cal-event-dot:not(.cal-cat-dot)').forEach(dot => {
         dot.addEventListener('click', () => { openAttendancePanel(day.date, dot.dataset.eventId); });
       });
     }
 
+    cell.querySelectorAll('.cal-cat-dot').forEach(dot => dot.addEventListener('click', (e) => { e.stopPropagation(); openEventAttendance(dot.dataset.catId); }));
     grid.appendChild(cell);
   });
 }
@@ -1020,7 +1030,7 @@ function editUser(id) {
 }
 
 async function deleteUser(id) {
-  if (!confirm('Delete this user?')) return;
+  if (!confirm('Delete this user and ALL their records (registration, slot assignment, matching youth member and attendance)?')) return;
   const res = await apiCall('delete_user', { id });
   alert(res.message);
   if (res.success) loadUsers();
@@ -1165,7 +1175,7 @@ async function loadAttendanceCategories() {
   const card = document.getElementById('categoryEventsCard');
   const list = document.getElementById('attendanceCategoriesList');
   if (!card || !list) return;
-  if (!isSecretariatUser()) { card.classList.add('hidden'); return; }
+  card.classList.add('hidden'); return;
   const res = await apiCall('get_categories');
   if (!res.success) return;
   const cats = res.data.filter(c => Number(c.is_system) !== 1);
