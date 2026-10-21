@@ -33,6 +33,10 @@ function leaderSlotId($pdo) {
     return -1;
 }
 
+function nextId($pdo, $table) {
+    return (int)$pdo->query("SELECT COALESCE(MAX(id),0) FROM `$table`")->fetchColumn() + 1;
+}
+
 function tableExists($pdo, $t) {
     return (bool)$pdo->query("SHOW TABLES LIKE '$t'")->fetch();
 }
@@ -45,9 +49,9 @@ function ensureCoy($pdo) {
           `sort_order` int(11) NOT NULL DEFAULT 0,
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
-        $ins = $pdo->prepare("INSERT INTO coy_positions (name, sort_order) VALUES (?, ?)");
+        $ins = $pdo->prepare("INSERT INTO coy_positions (id, name, sort_order) VALUES (?, ?, ?)");
         $defaults = ['Coordinator','Deputy','Finance Head','Finance Assistant Head','Secretary Head','Secretary Assistant Head','Module Head','Module Assistant Head','Animation Head','Animation Assistant Head','Creatives'];
-        foreach ($defaults as $i => $n) $ins->execute([$n, $i + 1]);
+        foreach ($defaults as $i => $n) $ins->execute([$i + 1, $n, $i + 1]);
     }
     if (!tableExists($pdo, 'coy_committees')) {
         $pdo->exec("CREATE TABLE `coy_committees` (
@@ -56,8 +60,8 @@ function ensureCoy($pdo) {
           `sort_order` int(11) NOT NULL DEFAULT 0,
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
-        $ins = $pdo->prepare("INSERT INTO coy_committees (name, sort_order) VALUES (?, ?)");
-        foreach (['Secretary','Module','Creatives','Finance','Animation'] as $i => $n) $ins->execute([$n, $i + 1]);
+        $ins = $pdo->prepare("INSERT INTO coy_committees (id, name, sort_order) VALUES (?, ?, ?)");
+        foreach (['Secretary','Module','Creatives','Finance','Animation'] as $i => $n) $ins->execute([$i + 1, $n, $i + 1]);
     }
     if (!tableExists($pdo, 'coy_holders')) {
         $pdo->exec("CREATE TABLE `coy_holders` (
@@ -188,7 +192,7 @@ switch ($action) {
             respond(true, 'Position updated.');
         }
         $max = (int)$pdo->query("SELECT COALESCE(MAX(sort_order),0) m FROM coy_positions")->fetch()['m'];
-        $pdo->prepare("INSERT INTO coy_positions (name, sort_order) VALUES (?, ?)")->execute([$name, $max + 1]);
+        $pdo->prepare("INSERT INTO coy_positions (id, name, sort_order) VALUES (?, ?, ?)")->execute([nextId($pdo, 'coy_positions'), $name, $max + 1]);
         respond(true, 'Position added.');
     }
 
@@ -208,7 +212,7 @@ switch ($action) {
         $s = $pdo->prepare("SELECT id FROM coy_positions WHERE id = ?");
         $s->execute([$pos]);
         if (!$s->fetch()) respond(false, 'Invalid position.');
-        $pdo->prepare("INSERT IGNORE INTO coy_holders (position_id, member_id) VALUES (?, ?)")->execute([$pos, $mem]);
+        $pdo->prepare("INSERT IGNORE INTO coy_holders (id, position_id, member_id) VALUES (?, ?, ?)")->execute([nextId($pdo, 'coy_holders'), $pos, $mem]);
         respond(true, 'Member assigned to position.');
     }
 
@@ -227,7 +231,7 @@ switch ($action) {
         $s = $pdo->prepare("SELECT id FROM coy_committees WHERE id = ?");
         $s->execute([$com]);
         if (!$s->fetch()) respond(false, 'Invalid committee.');
-        $pdo->prepare("INSERT IGNORE INTO coy_committee_members (committee_id, member_id) VALUES (?, ?)")->execute([$com, $mem]);
+        $pdo->prepare("INSERT IGNORE INTO coy_committee_members (id, committee_id, member_id) VALUES (?, ?, ?)")->execute([nextId($pdo, 'coy_committee_members'), $com, $mem]);
         respond(true, 'Member added to committee.');
     }
 

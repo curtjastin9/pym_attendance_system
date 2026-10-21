@@ -28,8 +28,9 @@ function rlCount($pdo, $bucket, $key, $window) {
 }
 function rlHit($pdo, $bucket, $key) {
     try {
-        $pdo->prepare("INSERT INTO rate_limits (bucket, rkey, hit_at) VALUES (?,?,?)")
-            ->execute([$bucket, substr($key, 0, 150), time()]);
+        $nid = (int)$pdo->query("SELECT COALESCE(MAX(id),0) FROM rate_limits")->fetchColumn() + 1;
+        $pdo->prepare("INSERT INTO rate_limits (id, bucket, rkey, hit_at) VALUES (?,?,?,?)")
+            ->execute([$nid, $bucket, substr($key, 0, 150), time()]);
         if (random_int(1, 100) === 1) $pdo->prepare("DELETE FROM rate_limits WHERE hit_at < ?")->execute([time() - 86400]);
     } catch (Throwable $e) { /* ignore */ }
 }

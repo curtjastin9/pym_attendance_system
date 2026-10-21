@@ -15,6 +15,23 @@ function pym_env($k) {
     return ($v === false || $v === '') ? null : (string)$v;
 }
 
+/* API files must ALWAYS answer with JSON (never an empty 500 page) */
+(function () {
+    $f = basename($_SERVER['SCRIPT_FILENAME'] ?? '');
+    if (strpos($f, 'api') !== 0) return;
+    $out = function ($m) {
+        if (!headers_sent()) { header('Content-Type: application/json'); http_response_code(200); }
+        $msg = 'Something went wrong on the server. Please try again.';
+        if (pym_env('DB_HIDE_ERRORS') !== '1') $msg .= ' [' . $m . ']';
+        echo json_encode(['success' => false, 'message' => $msg, 'data' => null]);
+    };
+    set_exception_handler(function ($e) use ($out) { error_log('PYM uncaught: ' . $e->getMessage()); $out($e->getMessage()); });
+    register_shutdown_function(function () use ($out) {
+        $e = error_get_last();
+        if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) $out($e['message']);
+    });
+})();
+
 /** Database credentials: defaults -> config.local.php -> environment variables. */
 function pym_db_creds() {
     $DB_HOST = 'localhost'; $DB_NAME = 'pym_attendance'; $DB_USER = 'root'; $DB_PASS = ''; $DB_CHARSET = 'utf8mb4'; $DB_PORT = '3306';

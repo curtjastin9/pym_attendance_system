@@ -18,6 +18,10 @@ function respond($success, $message = '', $data = null) {
     exit;
 }
 
+function nextId($pdo, $table) {
+    return (int)$pdo->query("SELECT COALESCE(MAX(id),0) FROM `$table`")->fetchColumn() + 1;
+}
+
 function currentUser() {
     if (!isset($_SESSION['user_id'])) return null;
     return [
@@ -263,8 +267,8 @@ switch ($action) {
                 $d->execute([$full_name]);
                 if ($d->fetch()) respond(false, 'duplicate');
             }
-            $stmt = $pdo->prepare("INSERT INTO youth_members (full_name, contact, address, birthdate, slot_id, status) VALUES (?,?,?,?,?,?)");
-            $stmt->execute([$full_name, $contact, $address, $birthdate, $slot_id, $status]);
+            $stmt = $pdo->prepare("INSERT INTO youth_members (id, full_name, contact, address, birthdate, slot_id, status) VALUES (?,?,?,?,?,?,?)");
+            $stmt->execute([nextId($pdo, 'youth_members'), $full_name, $contact, $address, $birthdate, $slot_id, $status]);
             respond(true, 'Member added successfully.');
         }
     }
@@ -299,8 +303,8 @@ switch ($action) {
             $stmt->execute([$title, $type, $event_date, $event_time, $location, $id]);
             respond(true, 'Event updated successfully.');
         } else {
-            $stmt = $pdo->prepare("INSERT INTO events (title, type, event_date, event_time, location) VALUES (?,?,?,?,?)");
-            $stmt->execute([$title, $type, $event_date, $event_time, $location]);
+            $stmt = $pdo->prepare("INSERT INTO events (id, title, type, event_date, event_time, location) VALUES (?,?,?,?,?,?)");
+            $stmt->execute([nextId($pdo, 'events'), $title, $type, $event_date, $event_time, $location]);
             respond(true, 'Event added successfully.');
         }
     }
@@ -379,10 +383,11 @@ switch ($action) {
             $pdo->prepare("UPDATE users SET slot_id = NULL WHERE slot_id = ?")->execute([$id]);
             $pdo->prepare("DELETE FROM slot_leaders WHERE slot_id = ?")->execute([$id]);
 
-            $ins  = $pdo->prepare("INSERT INTO slot_leaders (slot_id, user_id) VALUES (?, ?)");
+            $ins  = $pdo->prepare("INSERT INTO slot_leaders (id, slot_id, user_id) VALUES (?, ?, ?)");
+            $nid  = nextId($pdo, 'slot_leaders');
             $sync = $pdo->prepare("UPDATE users SET slot_id = ? WHERE id = ?");
             foreach ($leader_ids as $uid) {
-                $ins->execute([$id, $uid]);
+                $ins->execute([$nid++, $id, $uid]);
                 $sync->execute([$id, $uid]);
             }
 
@@ -681,8 +686,8 @@ switch ($action) {
             $stmt->execute([$username]);
             if ($stmt->fetch()) respond(false, 'That username is already taken.');
             $hash = password_hash($password, PASSWORD_BCRYPT);
-            $stmt = $pdo->prepare("INSERT INTO users (full_name, username, password, role, slot_id, status) VALUES (?,?,?,?,?,?)");
-            $stmt->execute([$full_name, $username, $hash, $role, $slot_id, $status]);
+            $stmt = $pdo->prepare("INSERT INTO users (id, full_name, username, password, role, slot_id, status) VALUES (?,?,?,?,?,?,?)");
+            $stmt->execute([nextId($pdo, 'users'), $full_name, $username, $hash, $role, $slot_id, $status]);
             respond(true, 'User added successfully.');
         }
     }
@@ -719,7 +724,7 @@ switch ($action) {
             $pdo->prepare("UPDATE event_categories SET name = ? WHERE id = ?")->execute([$name, $id]);
             respond(true, 'Category renamed successfully.');
         }
-        $pdo->prepare("INSERT INTO event_categories (name, is_system) VALUES (?, 0)")->execute([$name]);
+        $pdo->prepare("INSERT INTO event_categories (id, name, is_system) VALUES (?, ?, 0)")->execute([nextId($pdo, 'event_categories'), $name]);
         respond(true, 'Category added successfully.');
     }
 
@@ -755,8 +760,8 @@ switch ($action) {
                 ->execute([$title, $event_date, $event_time, $location, $category_id, $id]);
             respond(true, 'Event updated successfully.');
         }
-        $pdo->prepare("INSERT INTO events (title, type, event_date, event_time, location, category_id) VALUES (?,?,?,?,?,?)")
-            ->execute([$title, 'category', $event_date, $event_time, $location, $category_id]);
+        $pdo->prepare("INSERT INTO events (id, title, type, event_date, event_time, location, category_id) VALUES (?,?,?,?,?,?,?)")
+            ->execute([nextId($pdo, 'events'), $title, 'category', $event_date, $event_time, $location, $category_id]);
         respond(true, 'Event added successfully.');
     }
 
