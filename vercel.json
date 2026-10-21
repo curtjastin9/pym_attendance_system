@@ -1,20 +1,22 @@
 {
   "builds": [
-    { "src": "home.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php", "cacert.pem"] } },
-    { "src": "index.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php", "cacert.pem"] } },
-    { "src": "login.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php", "cacert.pem"] } },
-    { "src": "public.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php", "cacert.pem"] } },
-    { "src": "api.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php", "cacert.pem"] } },
-    { "src": "api_public.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php", "cacert.pem"] } },
-    { "src": "api_records.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php", "cacert.pem"] } },
-    { "src": "api_coy.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php", "cacert.pem"] } },
-    { "src": "api_attendance.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php", "cacert.pem"] } },
+    { "src": "home.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
+    { "src": "index.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
+    { "src": "login.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
+    { "src": "public.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
+    { "src": "api.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
+    { "src": "api_public.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
+    { "src": "api_records.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
+    { "src": "api_coy.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
+    { "src": "api_attendance.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
     { "src": "**/*.png", "use": "@vercel/static" },
     { "src": "**/*.jpg", "use": "@vercel/static" },
     { "src": "**/*.jpeg", "use": "@vercel/static" },
     { "src": "**/*.ico", "use": "@vercel/static" },
     { "src": "**/*.svg", "use": "@vercel/static" },
     { "src": "**/*.webp", "use": "@vercel/static" },
+    { "src": "**/*.PNG", "use": "@vercel/static" },
+    { "src": "**/*.JPG", "use": "@vercel/static" },
     { "src": "**/*.css", "use": "@vercel/static" },
     { "src": "**/*.js", "use": "@vercel/static" }
   ],
@@ -23,6 +25,7 @@
     { "src": "/(index|login)\\.html", "dest": "/home.php" },
     { "src": "/(home|index|login|public|api|api_public|api_records|api_coy|api_attendance)\\.php", "dest": "/$1.php" },
     { "src": "/(session|config|security|attendance_schema)\\.php", "status": 404, "dest": "/home.php" },
-    { "handle": "filesystem" }
+    { "handle": "filesystem" },
+    { "src": "/logo\\.png", "dest": "/LOGO.png" }
   ]
 }
