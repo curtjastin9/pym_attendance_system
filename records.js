@@ -138,11 +138,11 @@ window.loadRecordsPage = async function () {
 function recSetRange(kind) {
   const now = new Date();
   let from, to = now;
-  if (kind === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (kind === 'month') { from = new Date(now.getFullYear(), now.getMonth(), 1); to = new Date(now.getFullYear(), now.getMonth() + 1, 0); }
   else if (kind === 'lastmonth') { from = new Date(now.getFullYear(), now.getMonth() - 1, 1); to = new Date(now.getFullYear(), now.getMonth(), 0); }
   else if (kind === '30') from = new Date(now.getTime() - 29 * 86400000);
   else if (kind === '90') from = new Date(now.getTime() - 89 * 86400000);
-  else if (kind === 'year') from = new Date(now.getFullYear(), 0, 1);
+  else if (kind === 'year') { from = new Date(now.getFullYear(), 0, 1); to = new Date(now.getFullYear(), 11, 31); }
   recEl('recFrom').value = recYmd(from);
   recEl('recTo').value = recYmd(to);
 }

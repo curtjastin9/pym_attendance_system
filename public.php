@@ -192,11 +192,11 @@ async function api(action,payload){
 
 function setRange(k){
   const n=new Date();let f,t=n;
-  if(k==='month')f=new Date(n.getFullYear(),n.getMonth(),1);
+  if(k==='month'){f=new Date(n.getFullYear(),n.getMonth(),1);t=new Date(n.getFullYear(),n.getMonth()+1,0)}
   else if(k==='lastmonth'){f=new Date(n.getFullYear(),n.getMonth()-1,1);t=new Date(n.getFullYear(),n.getMonth(),0)}
   else if(k==='30')f=new Date(n-29*864e5);
   else if(k==='90')f=new Date(n-89*864e5);
-  else f=new Date(n.getFullYear(),0,1);
+  else{f=new Date(n.getFullYear(),0,1);t=new Date(n.getFullYear(),11,31)}
   $('from').value=ymd(f);$('to').value=ymd(t);
 }
 
