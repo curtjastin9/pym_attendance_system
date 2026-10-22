@@ -320,7 +320,7 @@ async function loadDashboardStats() {
       else if (s.pct > 0) cls = 'red';
       return `
         <div class="slot-row">
-          <div class="slot-name"><span class="slot-dot" style="background:${escapeHtml(s.color)}"></span>${escapeHtml(s.name)}</div>
+          <div class="slot-name"><span class="slot-dot" style="background:${escapeHtml(s.color)}"></span><span>${escapeHtml(s.name)}<br><small style="color:var(--text-faint);font-weight:500">${s.date ? formatDate(s.date) : ''}</small></span></div>
           <div class="slot-bar-wrap"><div class="slot-progress ${cls}" style="width:${s.pct}%"></div></div>
           <div class="slot-pct">${s.pct}%</div>
         </div>

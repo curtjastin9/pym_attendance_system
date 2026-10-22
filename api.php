@@ -218,10 +218,17 @@ switch ($action) {
             $stmt->execute([$slot['id']]);
             $total = (int)$stmt->fetch()['c'];
             $stmt = $pdo->prepare("SELECT COUNT(*) c FROM attendance WHERE slot_id = ? AND att_date = ? AND status = 'present'");
-            $stmt->execute([$slot['id'], $today]);
+            $diff = ((int)date('w') - (int)$slot['dow'] + 7) % 7;
+            $recent = date('Y-m-d', strtotime("-$diff day"));
+            if ($diff === 0) {
+                $chk = $pdo->prepare("SELECT COUNT(*) c FROM attendance WHERE slot_id = ? AND att_date = ?");
+                $chk->execute([$slot['id'], $recent]);
+                if ((int)$chk->fetch()['c'] === 0) $recent = date('Y-m-d', strtotime('-7 day'));
+            }
+            $stmt->execute([$slot['id'], $recent]);
             $present = (int)$stmt->fetch()['c'];
             $pct = $total > 0 ? round(($present / $total) * 100) : 0;
-            $slotSummary[] = ['id'=>$slot['id'],'name'=>$slot['name'],'color'=>$slot['color'],'total'=>$total,'present'=>$present,'pct'=>$pct];
+            $slotSummary[] = ['id'=>$slot['id'],'name'=>$slot['name'],'color'=>$slot['color'],'total'=>$total,'present'=>$present,'pct'=>$pct,'date'=>$recent];
         }
         $data['slot_summary'] = $slotSummary;
         respond(true, '', $data);

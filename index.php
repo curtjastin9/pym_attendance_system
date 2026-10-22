@@ -210,7 +210,7 @@ if (!isset($_SESSION['user_id'])) {
         <div class="card-header">
           <div>
             <h3>Slot Summary</h3>
-            <p class="card-sub">Today's performance per slot</p>
+            <p class="card-sub">Most recent service per slot</p>
           </div>
         </div>
         <div class="slot-list" id="slotList">
