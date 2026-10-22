@@ -322,7 +322,7 @@ async function loadDashboardStats() {
         <div class="slot-row">
           <div class="slot-name"><span class="slot-dot" style="background:${escapeHtml(s.color)}"></span><span>${escapeHtml(s.name)}<br><small style="color:var(--text-faint);font-weight:500">${s.date ? formatDate(s.date) : ''}</small></span></div>
           <div class="slot-bar-wrap" style="display:flex" title="Present ${s.present} · Excused ${s.excused || 0} · Absent ${Math.max(0, s.total - s.present - (s.excused || 0))}">${(() => {
-          const t = s.total || 0, pw = t ? s.present / t * 100 : 0, ew = t ? (s.excused || 0) / t * 100 : 0, aw = (t && s.recorded) ? Math.max(0, 100 - pw - ew) : 0;
+          const t = s.total || 0, pw = t ? s.present / t * 100 : 0, ew = t ? (s.excused || 0) / t * 100 : 0, aw = t ? Math.max(0, 100 - pw - ew) : 0;
           return `<div style="width:${pw}%;background:#10B981"></div><div style="width:${ew}%;background:#7C3AED"></div><div style="width:${aw}%;background:#EF4444"></div>`;
         })()}</div>
           <div class="slot-pct">${s.pct}%</div>
