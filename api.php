@@ -138,9 +138,22 @@ switch ($action) {
         if (rlCount($pdo, 'login', $rlKey, 900) >= 5 || rlCount($pdo, 'loginip', clientIp(), 900) >= 25) {
             respond(false, 'Too many failed attempts. Please wait 15 minutes and try again.');
         }
-        $stmt = $pdo->prepare('SELECT * FROM users WHERE username = ?');
-        $stmt->execute([$username]);
-        $user = $stmt->fetch();
+        $user = null;
+        if (strpos($username, '@') !== false) { // Gmail login (dots and +tags ignored, same as registration)
+            [$gl, $gd] = explode('@', strtolower($username), 2);
+            if (in_array($gd, ['gmail.com', 'googlemail.com'], true)) {
+                try {
+                    $stmt = $pdo->prepare('SELECT * FROM users WHERE email_key = ?');
+                    $stmt->execute([str_replace('.', '', explode('+', $gl)[0]) . '@gmail.com']);
+                    $user = $stmt->fetch() ?: null;
+                } catch (Throwable $e) { $user = null; }
+            }
+        }
+        if (!$user) {
+            $stmt = $pdo->prepare('SELECT * FROM users WHERE username = ?');
+            $stmt->execute([$username]);
+            $user = $stmt->fetch();
+        }
         if (!$user || !password_verify($password, $user['password'])) {
             rlHit($pdo, 'login', $rlKey);
             rlHit($pdo, 'loginip', clientIp());

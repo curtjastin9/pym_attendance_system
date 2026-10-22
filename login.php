@@ -48,8 +48,8 @@ if (isset($_SESSION['user_id'])) {
 
       <!-- LOGIN FORM -->
       <form id="loginForm" class="auth-form active">
-        <label>Username</label>
-        <input type="text" name="username" placeholder="Enter username" required/>
+        <label>Username or Gmail</label>
+        <input type="text" name="username" placeholder="Username or yourname@gmail.com" autocapitalize="none" required/>
 
         <label>Password</label>
         <input type="password" name="password" placeholder="Enter password" required/>

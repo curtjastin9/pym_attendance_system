@@ -187,7 +187,12 @@
           <div class="form-actions"><button type="button" class="auth-btn small" id="xMailVerify"><i class="fas fa-check"></i> Verify &amp; Save</button></div>
         </div>
       </div>`);
-      const loadMail = async () => { const r = await acc('my_account'); if (r.success && r.data) $('xMailCur').textContent = r.data.email || 'No email set'; };
+      const up = $('settingsUsername');
+      if (up && up.parentElement) up.parentElement.insertAdjacentHTML('afterend', '<p><strong>Email:</strong> <span id="xInfoEmail">—</span></p>');
+      const loadMail = async () => {
+        const r = await acc('my_account');
+        if (r.success && r.data) { const v = r.data.email || 'No email set'; $('xMailCur').textContent = v; $('xInfoEmail').textContent = v; }
+      };
       loadMail();
       let pending = '';
       $('xPwForm').addEventListener('submit', async e => {
