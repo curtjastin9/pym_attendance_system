@@ -9,10 +9,12 @@ if (!isset($_SESSION['user_id'])) {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#08101F"/>
   <link rel="icon" type="image/png" href="favicon.png"/>
 <title>Parish Youth Ministry – Attendance System</title>
   <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="mobile.css"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
@@ -893,11 +895,19 @@ Pedro Reyes&#9;inactive"></textarea>
 
 </main>
 
+<nav class="bottom-nav" aria-label="Main">
+  <button type="button" class="bn-item" data-page="dashboard"><i class="fas fa-th-large"></i><span>Home</span></button>
+  <button type="button" class="bn-item" data-page="attendance"><i class="fas fa-clipboard-check"></i><span>Attendance</span></button>
+  <button type="button" class="bn-item" data-page="youth"><i class="fas fa-users"></i><span>Youth</span></button>
+  <button type="button" class="bn-item secretariat-only" data-page="records"><i class="fas fa-file-excel"></i><span>Records</span></button>
+  <button type="button" class="bn-item bn-more"><i class="fas fa-bars"></i><span>More</span></button>
+</nav>
 <div class="overlay" id="overlay"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="app.js"></script>
 <script src="coy.js"></script>
 <script src="records.js"></script>
 <script src="excused.js"></script>
+<script src="mobile.js"></script>
 </body>
 </html>
