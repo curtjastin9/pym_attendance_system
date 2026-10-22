@@ -13,9 +13,6 @@
   .x-fu-name small{display:block;font-weight:500;color:var(--text-soft);font-size:11.5px}
   .x-fu-pill{background:var(--crimson-pale);color:var(--crimson);font-size:11.5px;font-weight:800;padding:4px 11px;border-radius:99px}
   .x-fu-last{font-size:11.5px;color:var(--text-soft);min-width:130px;text-align:right}
-  .att-seg button.active[data-s="volunteer"]{background:var(--violet-mid);color:#fff;box-shadow:0 4px 12px rgba(124,58,237,.28)}
-  .status-pill.volunteer{background:var(--violet-pale);color:var(--violet)}
-  .status-dot.volunteer{background:var(--violet-mid)}
   .att-tag{font-size:10.5px;font-weight:700;border-radius:99px;padding:2px 8px;display:inline-block;margin-top:3px}
   .att-tag.vis{background:var(--violet-pale);color:var(--violet)}
   .att-tag.else{background:var(--amber-pale);color:var(--amber)}
@@ -30,7 +27,7 @@
   .vis-opt small{color:var(--text-soft);margin-left:6px}
   .x-acc .form-field{max-width:360px}
   .x-mail-cur{font-size:13px;color:var(--text-mid);margin-bottom:12px}
-  @media(max-width:640px){.att-seg{grid-template-columns:repeat(2,1fr)!important}.x-fu-last{text-align:left}}`;
+  @media(max-width:640px){.x-fu-last{text-align:left}}`;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
   const $ = id => document.getElementById(id);
@@ -68,18 +65,18 @@
   /* ---------- Attendance rows: Volunteer + visitors ---------- */
   const NOW = () => new Date().toTimeString().substring(0, 5);
   window.attRowHtml = function (m) {
-    const ST = ['present', 'absent', 'excused', 'volunteer'];
+    const ST = ['present', 'absent', 'excused'];
     const s = ST.includes(m.status) ? m.status : 'absent';
     const vis = Number(m.visitor) === 1 || m.visitor === true;
     const tv = m.time_in ? m.time_in.substring(0, 5) : '';
     const seg = ST.map(x => `<button type="button" data-s="${x}" class="${x === s ? 'active' : ''}">${x.charAt(0).toUpperCase() + x.slice(1)}</button>`).join('');
-    const tag = vis ? `<br><span class="att-tag vis">Visitor · from ${escapeHtml(m.slot_name || 'no slot')}</span>`
+    const tag = vis ? `<br><span class="att-tag vis">Volunteer · from ${escapeHtml(m.slot_name || 'no slot')}</span>`
       : (m.elsewhere ? `<br><span class="att-tag else">Attended ${escapeHtml(m.elsewhere)}</span>` : '');
     return `<tr data-member-id="${m.member_id}" data-status="${s}" data-name="${escapeHtml(m.full_name)}" data-visitor="${vis ? 1 : 0}">
       <td>${escapeHtml(m.full_name)}${tag}</td>
       <td>${escapeHtml(m.slot_name || '—')}</td>
       <td><div class="att-seg">${seg}</div></td>
-      <td><input type="time" value="${tv}" ${s === 'present' || s === 'volunteer' ? '' : 'disabled'}/></td>
+      <td><input type="time" value="${tv}" ${s === 'present' ? '' : 'disabled'}/></td>
       <td><input type="text" class="att-reason ${s === 'excused' ? '' : 'hidden'}" readonly maxlength="255" title="Tap to edit the reason" placeholder="Tap to add reason" value="${escapeHtml(m.reason || '')}"/></td>
     </tr>`;
   };
@@ -95,7 +92,6 @@
     } else {
       rs.classList.add('hidden'); rs.value = '';
       if (s === 'present') { ti.disabled = false; if (!ti.value) ti.value = NOW(); }
-      else if (s === 'volunteer') { ti.disabled = false; }
       else { ti.value = ''; ti.disabled = true; }
     }
     row.dataset.status = s;
@@ -125,7 +121,7 @@
 
   attMarkAll = function (tbody, s) {
     tbody.querySelectorAll('tr[data-member-id]').forEach(row => {
-      if (row.dataset.status === 'excused' || row.dataset.status === 'volunteer') return;
+      if (row.dataset.status === 'excused') return;
       attSetRow(row, s);
     });
   };
@@ -144,13 +140,12 @@
     if (qa) {
       const box = document.createElement('div');
       box.className = 'vis-box';
-      box.innerHTML = '<div class="vis-search"><i class="fas fa-user-plus"></i><input type="text" id="visInput" placeholder="Add a visitor / transferred member (search name)..." autocomplete="off"/><div id="visList" class="vis-list hidden"></div></div>';
+      box.innerHTML = '<div class="vis-search"><i class="fas fa-user-plus"></i><input type="text" id="visInput" placeholder="Insert volunteer — pick from youth members..." autocomplete="off"/><div id="visList" class="vis-list hidden"></div></div>';
       qa.after(box);
       let t = null;
       $('visInput').addEventListener('input', e => {
         clearTimeout(t);
         const q = e.target.value.trim(), list = $('visList');
-        if (q.length < 2) { list.classList.add('hidden'); return; }
         t = setTimeout(async () => {
           const sid = $('attendanceEventSelect').value;
           if (!sid) { alert('Please select a service time first.'); return; }
@@ -161,6 +156,7 @@
           list.classList.remove('hidden');
         }, 300);
       });
+      $('visInput').addEventListener('focus', e => e.target.dispatchEvent(new Event('input')));
       document.addEventListener('mousedown', e => {
         const o = e.target.closest('.vis-opt[data-id]');
         if (o) { e.preventDefault(); addVisitor({ id: o.dataset.id, full_name: o.dataset.name, slot_name: o.dataset.slot }); $('visInput').value = ''; $('visList').classList.add('hidden'); }

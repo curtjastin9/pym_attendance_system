@@ -109,7 +109,7 @@ switch ($action) {
             foreach ($rows as $r) $have[$r['member_id'] . '|' . $r['category'] . '|' . $r['date'] . '|' . $r['event']] = true;
             $att = [];
             try {
-                $q = $pdo->prepare("SELECT member_id, att_date FROM attendance WHERE att_date BETWEEN ? AND ? AND status IN ('present','volunteer')");
+                $q = $pdo->prepare("SELECT member_id, att_date FROM attendance WHERE att_date BETWEEN ? AND ? AND status = 'present'");
                 $q->execute([$from, $to]);
                 foreach ($q->fetchAll() as $t) $att[$t['member_id'] . '|' . $t['att_date']] = true;
             } catch (Throwable $e) {}

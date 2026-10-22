@@ -98,7 +98,7 @@ th{background:var(--surface2);text-align:left;font-size:10.5px;font-weight:800;l
 td{padding:12px 15px;border-top:1px solid var(--border);white-space:nowrap}
 tbody tr:hover{background:var(--surface2)}
 .pill{display:inline-block;border-radius:99px;padding:3px 11px;font-size:11px;font-weight:800;text-transform:capitalize}
-.pill.present{background:var(--em-pale);color:var(--emerald)}.pill.absent{background:var(--cr-pale);color:var(--crimson)}.pill.excused{background:var(--am-pale);color:var(--amber)}.pill.volunteer{background:#EDE9FE;color:#6D28D9}
+.pill.present{background:var(--em-pale);color:var(--emerald)}.pill.absent{background:var(--cr-pale);color:var(--crimson)}.pill.excused{background:var(--am-pale);color:var(--amber)}
 .rate{display:inline-block;border-radius:99px;padding:3px 11px;font-size:11.5px;font-weight:800}
 .rate.hi{background:var(--em-pale);color:var(--emerald)}.rate.mid{background:var(--am-pale);color:var(--amber)}.rate.lo{background:var(--cr-pale);color:var(--crimson)}
 .pager{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:13px;color:var(--soft)}
@@ -129,7 +129,7 @@ footer{text-align:center;color:rgba(255,255,255,.4);font-size:12.5px;padding:10p
       <div><label class="l">From</label><input type="date" id="from"/></div>
       <div><label class="l">To</label><input type="date" id="to"/></div>
       <div><label class="l">Status</label>
-        <select id="status"><option value="">All statuses</option><option value="present">Present only</option><option value="absent">Absent only (includes excused)</option><option value="excused">Excused only</option><option value="volunteer">Volunteer only</option></select></div>
+        <select id="status"><option value="">All statuses</option><option value="present">Present only</option><option value="absent">Absent only (includes excused)</option><option value="excused">Excused only</option></select></div>
     </div>
     <div class="quick" id="quick">
       <button data-r="month">This month</button><button data-r="lastmonth">Last month</button><button data-r="30">Last 30 days</button><button data-r="90">Last 90 days</button><button data-r="year">This year</button>
@@ -217,13 +217,13 @@ function drawMembers(){
 /* ---------- math ---------- */
 function stats(rows){
   let p=0,x=0;const m=new Set(),e=new Set();
-  rows.forEach(r=>{if(r.status==='present'||r.status==='volunteer')p++;else if(r.status==='excused')x++;m.add(r.member);e.add(r.date+'|'+r.category+'|'+r.event)});
+  rows.forEach(r=>{if(r.status==='present')p++;else if(r.status==='excused')x++;m.add(r.member);e.add(r.date+'|'+r.category+'|'+r.event)});
   const t=rows.length;return{total:t,present:p,absent:t-p,excused:x,rate:pct(p,t),members:m.size,events:e.size};
 }
 function group(rows,key,base){
   const mp=new Map();
   rows.forEach(r=>{const k=key(r);if(!mp.has(k))mp.set(k,Object.assign(base(r),{present:0,absent:0,excused:0,total:0}));const g=mp.get(k);g.total++;
-    if(r.status==='present'||r.status==='volunteer')g.present++;else{g.absent++;if(r.status==='excused')g.excused++}});
+    if(r.status==='present')g.present++;else{g.absent++;if(r.status==='excused')g.excused++}});
   return [...mp.values()].map(g=>Object.assign(g,{rate:pct(g.present,g.total)}));
 }
 
@@ -245,7 +245,7 @@ async function generate(){
 function applyFilters(){
   const st=$('status').value,q=$('q').value.trim().toLowerCase();
   S.f=S.rows.filter(r=>{
-    if(st==='absent'&&(r.status==='present'||r.status==='volunteer'))return false;
+    if(st==='absent'&&r.status==='present')return false;
     if(st&&st!=='absent'&&r.status!==st)return false;
     if(q&&!(`${r.member} ${r.event} ${r.category} ${r.slot||''}`).toLowerCase().includes(q))return false;
     return true;});

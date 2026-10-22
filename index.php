@@ -288,7 +288,6 @@ if (!isset($_SESSION['user_id'])) {
             <option value="present">Present only</option>
             <option value="absent">Absent only (includes excused)</option>
             <option value="excused">Excused only</option>
-            <option value="volunteer">Volunteer only</option>
           </select>
         </div>
       </div>

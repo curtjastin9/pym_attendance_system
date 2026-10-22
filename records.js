@@ -99,7 +99,7 @@ function recStats(rows) {
   let present = 0, excused = 0;
   const members = new Set(), events = new Set();
   rows.forEach(r => {
-    if (r.status === 'present' || r.status === 'volunteer') present++;
+    if (r.status === 'present') present++;
     else if (r.status === 'excused') excused++;
     members.add(r.member);
     events.add(r.date + '|' + r.category + '|' + r.event);
@@ -115,7 +115,7 @@ function recGroup(rows, keyFn, baseFn) {
     if (!map.has(k)) map.set(k, Object.assign(baseFn(r), { present: 0, absent: 0, excused: 0, total: 0 }));
     const g = map.get(k);
     g.total++;
-    if (r.status === 'present' || r.status === 'volunteer') g.present++; else { g.absent++; if (r.status === 'excused') g.excused++; }
+    if (r.status === 'present') g.present++; else { g.absent++; if (r.status === 'excused') g.excused++; }
   });
   return Array.from(map.values()).map(g => Object.assign(g, { rate: recPct(g.present, g.total) }));
 }
@@ -220,7 +220,7 @@ function recApplyFilters() {
   const status = recEl('recStatus').value;
   const q = recEl('recSearch').value.trim().toLowerCase();
   REC.filtered = REC.rows.filter(r => {
-    if (status === 'absent' && (r.status === 'present' || r.status === 'volunteer')) return false;
+    if (status === 'absent' && r.status === 'present') return false;
     if (status && status !== 'absent' && r.status !== status) return false;
     if (q && !(`${r.member} ${r.event} ${r.category} ${r.slot || ''} ${r.reason || ''}`).toLowerCase().includes(q)) return false;
     return true;
@@ -259,7 +259,7 @@ function recRender() {
     head = ['Date', 'Category', 'Event', 'Member', 'Slot', 'Status', 'Time In', 'Reason'];
     rows = REC.filtered.map(r => [
       formatDate(r.date), escapeHtml(r.category), escapeHtml(r.event), escapeHtml(r.member), escapeHtml(r.slot || '—'),
-      `<span class="status-pill ${r.status === 'present' ? 'active' : (r.status === 'excused' || r.status === 'volunteer') ? r.status : 'inactive'}">${r.status}</span>`, recTime(r.time_in), escapeHtml(r.reason || '—')]);
+      `<span class="status-pill ${r.status === 'present' ? 'active' : r.status === 'excused' ? 'excused' : 'inactive'}">${r.status}</span>`, recTime(r.time_in), escapeHtml(r.reason || '—')]);
   }
 
   const pages = Math.max(1, Math.ceil(rows.length / REC.per));

@@ -24,14 +24,14 @@ function requireEventMarker($pdo) {
 function leaderSlotId($pdo) { return pymLeaderSlot($pdo); }
 function cleanRecord($r) {
     $status = $r['status'] ?? 'absent';
-    if (!in_array($status, ['present', 'absent', 'excused', 'volunteer'], true)) $status = 'absent';
+    if (!in_array($status, ['present', 'absent', 'excused'], true)) $status = 'absent';
     $time = $r['time_in'] ?? null;
     if ($time === '') $time = null;
     if ($time !== null) $time = substr((string)$time, 0, 5) . ':00';
     $reason = trim((string)($r['reason'] ?? ''));
     if (function_exists('mb_substr')) $reason = mb_substr($reason, 0, 255); else $reason = substr($reason, 0, 255);
     if ($status === 'present' && $time === null) $time = date('H:i:s');
-    if (!in_array($status, ['present', 'volunteer'], true)) $time = null;
+    if ($status !== 'present') $time = null;
     if ($status !== 'excused') $reason = null;
     return [(int)($r['member_id'] ?? 0), $status, $time, $reason];
 }
@@ -53,9 +53,9 @@ function checkSlotAccess($pdo, $slot_id, $date) {
     $mine = leaderSlotId($pdo);
     if ($mine !== null && (int)$mine !== (int)$slot_id) respond(false, 'You do not have access to mark attendance for this slot.');
 }
-function eventCounts() { return ['present' => 0, 'volunteer' => 0, 'excused' => 0, 'absent' => 0]; }
+function eventCounts() { return ['present' => 0, 'excused' => 0, 'absent' => 0]; }
 function countLine($cnt, $n) {
-    return 'Present ' . $cnt['present'] . ', Volunteer ' . $cnt['volunteer'] . ', Excused ' . $cnt['excused'] . ', Absent ' . $cnt['absent'] . ' — ' . $n . ' change(s): ';
+    return 'Present ' . $cnt['present'] . ', Excused ' . $cnt['excused'] . ', Absent ' . $cnt['absent'] . ' — ' . $n . ' change(s): ';
 }
 
 switch ($action) {
@@ -73,7 +73,7 @@ switch ($action) {
         $rows = $stmt->fetchAll();
 
         $el = [];
-        $q = $pdo->prepare("SELECT a.member_id, g.name FROM attendance a JOIN groups_slots g ON g.id = a.slot_id WHERE a.att_date = ? AND a.slot_id <> ? AND a.status IN ('present','volunteer')");
+        $q = $pdo->prepare("SELECT a.member_id, g.name FROM attendance a JOIN groups_slots g ON g.id = a.slot_id WHERE a.att_date = ? AND a.slot_id <> ? AND a.status = 'present'");
         $q->execute([$date, $slot_id]);
         foreach ($q->fetchAll() as $r) $el[(int)$r['member_id']] = $r['name'];
         foreach ($rows as &$r) $r['elsewhere'] = $el[(int)$r['member_id']] ?? null;
@@ -93,10 +93,9 @@ switch ($action) {
         if (!$slot_id) respond(false, 'Please select a service time first.');
         $mine = leaderSlotId($pdo);
         if ($mine !== null && (int)$mine !== $slot_id) respond(false, 'You do not have access to this slot.');
-        if (strlen($q) < 2) respond(true, '', []);
         $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
         $s = $pdo->prepare("SELECT y.id, y.full_name, g.name AS slot_name FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id
-            WHERE y.status = 'active' AND (y.slot_id IS NULL OR y.slot_id <> ?) AND y.full_name LIKE ? ORDER BY y.full_name ASC LIMIT 15");
+            WHERE y.status = 'active' AND (y.slot_id IS NULL OR y.slot_id <> ?) AND y.full_name LIKE ? ORDER BY y.full_name ASC LIMIT 40");
         $s->execute([$slot_id, $like]);
         respond(true, '', $s->fetchAll());
     }
@@ -125,7 +124,7 @@ switch ($action) {
             $home = (int)$m['slot_id'] === $slot_id;
             if (!$home && (empty($r['visitor']) || $m['status'] !== 'active')) continue;
             $seen[$mid] = true;
-            $names[$mid] = $m['full_name'] . ($home ? '' : ' (visitor)');
+            $names[$mid] = $m['full_name'] . ($home ? '' : ' (volunteer)');
             if ($status === 'excused' && ($reason === null || $reason === '')) {
                 respond(false, 'Please type the reason for ' . $m['full_name'] . ' (Excused).');
             }

@@ -132,7 +132,7 @@ function isCoyOfficer($pdo) {
         return (bool)$s->fetchColumn();
     } catch (Throwable $e) { return false; }
 }
-/** Creates attendance_submissions and adds the 'volunteer' status. Once per session. */
+/** Creates attendance_submissions. Once per session. */
 function ensureExtraSchema($pdo) {
     if (!empty($_SESSION['extra_schema_ok'])) return;
     try {
@@ -146,8 +146,6 @@ function ensureExtraSchema($pdo) {
             UNIQUE KEY `uniq_sub` (`slot_id`,`att_date`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch (Throwable $e) { error_log('submissions table: ' . $e->getMessage()); }
-    try { require_once __DIR__ . '/attendance_schema.php'; ensureExcusedSchema($pdo); }
-    catch (Throwable $e) { error_log('volunteer enum: ' . $e->getMessage()); }
     $_SESSION['extra_schema_ok'] = 1;
 }
 /** Sessions that were recorded: any attendance row OR a submission. Returns ["slot|date" => true]. */

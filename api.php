@@ -216,7 +216,7 @@ switch ($action) {
         $presentToday = 0; $absentToday = 0; $services = [];
         foreach ($todaySlots as $slot) {
             $sid = (int)$slot['id'];
-            $p = ($att[$sid][$today]['present'] ?? 0) + ($att[$sid][$today]['volunteer'] ?? 0);
+            $p = $att[$sid][$today]['present'] ?? 0;
             $x = $att[$sid][$today]['excused'] ?? 0;
             $m = $mc[$sid] ?? 0;
             $a = ($nowT >= $slot['slot_time']) ? max(0, $m - $p) : $x;
@@ -252,7 +252,7 @@ switch ($action) {
             $cnt = 0;
             foreach ($att as $sid => $byDate) {
                 if ($leaderSlotId !== null && (int)$sid !== (int)$leaderSlotId) continue;
-                $cnt += ($byDate[$d]['present'] ?? 0) + ($byDate[$d]['volunteer'] ?? 0);
+                $cnt += $byDate[$d]['present'] ?? 0;
             }
             $chart[] = ['date'=>$d,'label'=>date('D', strtotime($d)),'count'=>$cnt];
         }
@@ -269,7 +269,7 @@ switch ($action) {
             $diff = ((int)date('w') - (int)$slot['dow'] + 7) % 7;
             $recent = date('Y-m-d', strtotime("-$diff day"));
             if ($diff === 0 && $nowT < $slot['slot_time']) $recent = date('Y-m-d', strtotime('-7 day'));
-            $present = ($att[$sid][$recent]['present'] ?? 0) + ($att[$sid][$recent]['volunteer'] ?? 0);
+            $present = $att[$sid][$recent]['present'] ?? 0;
             $excused = $att[$sid][$recent]['excused'] ?? 0;
             $pct = $total > 0 ? min(100, round(($present / $total) * 100)) : 0;
             $slotSummary[] = ['id'=>$slot['id'],'name'=>$slot['name'],'color'=>$slot['color'],'total'=>$total,'present'=>$present,'pct'=>$pct,'date'=>$recent,'excused'=>$excused,'recorded'=>1];
@@ -567,7 +567,7 @@ switch ($action) {
         $leaderSlotId = getLeaderSlotId($pdo);
 
         $pm = [];
-        $pst = $pdo->prepare("SELECT slot_id, att_date, COUNT(*) c FROM attendance WHERE att_date BETWEEN ? AND ? AND status IN ('present','volunteer') GROUP BY slot_id, att_date");
+        $pst = $pdo->prepare("SELECT slot_id, att_date, COUNT(*) c FROM attendance WHERE att_date BETWEEN ? AND ? AND status='present' GROUP BY slot_id, att_date");
         $pst->execute([date('Y-m-d', $firstDay), date('Y-m-t', $firstDay)]);
         foreach ($pst->fetchAll() as $r) $pm[$r['slot_id'] . '|' . $r['att_date']] = (int)$r['c'];
         $tm = [];
@@ -578,7 +578,7 @@ switch ($action) {
             try {
                 $from = date('Y-m-d', $firstDay); $to = date('Y-m-t', $firstDay);
                 $st = $pdo->prepare("SELECT e.id, e.title, e.event_date, e.event_time, e.location, c.name AS category,
-                    (SELECT COUNT(*) FROM event_attendance a WHERE a.event_id = e.id AND a.status IN ('present','volunteer')) AS present
+                    (SELECT COUNT(*) FROM event_attendance a WHERE a.event_id = e.id AND a.status='present') AS present
                     FROM events e JOIN event_categories c ON c.id = e.category_id
                     WHERE e.category_id IS NOT NULL AND e.event_date BETWEEN ? AND ? ORDER BY e.event_time ASC");
                 $st->execute([$from, $to]);
@@ -745,7 +745,7 @@ switch ($action) {
         $q->execute([CAL_START]);
         foreach ($q->fetchAll() as $r) {
             $k = $r['member_id'] . '|' . $r['att_date'];
-            if (in_array($r['status'], ['present', 'volunteer'], true)) $att[$k] = true;
+            if ($r['status'] === 'present') $att[$k] = true;
             elseif ($r['status'] === 'excused') $exc[$k] = true;
         }
         $mq = $pdo->prepare("SELECT id, full_name FROM youth_members WHERE status='active' AND slot_id = ? ORDER BY full_name ASC");

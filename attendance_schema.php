@@ -6,10 +6,10 @@ function ensureExcusedSchema($pdo) {
     foreach (['attendance', 'event_attendance'] as $t) {
         try {
             $col = $pdo->query("SHOW COLUMNS FROM `$t` LIKE 'status'")->fetch();
-            if ($col && stripos($col['Type'], 'enum') === 0 && (stripos($col['Type'], 'excused') === false || stripos($col['Type'], 'volunteer') === false)) {
+            if ($col && stripos($col['Type'], 'enum') === 0 && stripos($col['Type'], 'excused') === false) {
                 preg_match_all("/'([^']*)'/", $col['Type'], $m);
                 $vals = $m[1];
-                foreach (['excused', 'volunteer'] as $nv) if (!in_array($nv, $vals, true)) $vals[] = $nv;
+                $vals[] = 'excused';
                 $list = implode(',', array_map(fn($v) => "'" . str_replace("'", "''", $v) . "'", $vals));
                 $null = $col['Null'] === 'YES' ? 'NULL' : 'NOT NULL';
                 if ($col['Default'] !== null) $def = "DEFAULT '" . str_replace("'", "''", $col['Default']) . "'";
