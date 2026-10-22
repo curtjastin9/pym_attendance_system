@@ -227,8 +227,12 @@ switch ($action) {
             }
             $stmt->execute([$slot['id'], $recent]);
             $present = (int)$stmt->fetch()['c'];
+            $gs = $pdo->prepare("SELECT status, COUNT(*) c FROM attendance WHERE slot_id = ? AND att_date = ? GROUP BY status");
+            $gs->execute([$slot['id'], $recent]);
+            $excused = 0; $recorded = 0;
+            foreach ($gs->fetchAll() as $g) { $recorded += (int)$g['c']; if ($g['status'] === 'excused') $excused = (int)$g['c']; }
             $pct = $total > 0 ? round(($present / $total) * 100) : 0;
-            $slotSummary[] = ['id'=>$slot['id'],'name'=>$slot['name'],'color'=>$slot['color'],'total'=>$total,'present'=>$present,'pct'=>$pct,'date'=>$recent];
+            $slotSummary[] = ['id'=>$slot['id'],'name'=>$slot['name'],'color'=>$slot['color'],'total'=>$total,'present'=>$present,'pct'=>$pct,'date'=>$recent,'excused'=>$excused,'recorded'=>$recorded];
         }
         $data['slot_summary'] = $slotSummary;
         respond(true, '', $data);
