@@ -136,22 +136,31 @@ function pym_connect() {
 }
 
 class PymDbSessionHandler implements SessionHandlerInterface {
-    private $pdo;
-    public function __construct() {
-        $this->pdo = pym_connect();
+    private $pdo; private $old = null; private $oldId = null; private $oldTs = 0;
+    public function __construct() { $this->pdo = pym_connect(); }
+    public function open($path, $name): bool { return true; }
+    public function close(): bool { return true; }
+    private function make() {
         $this->pdo->exec("CREATE TABLE IF NOT EXISTS `php_sessions` (
             `id` varchar(128) NOT NULL, `data` mediumtext NOT NULL, `ts` int(11) NOT NULL,
             PRIMARY KEY (`id`), KEY `ts` (`ts`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }
-    public function open($path, $name): bool { return true; }
-    public function close(): bool { return true; }
     public function read($id): string|false {
-        $s = $this->pdo->prepare("SELECT data FROM php_sessions WHERE id = ?");
-        $s->execute([$id]);
-        $r = $s->fetch();
-        return $r ? $r['data'] : '';
+        $r = false;
+        try {
+            $s = $this->pdo->prepare("SELECT data, ts FROM php_sessions WHERE id = ?");
+            $s->execute([$id]);
+            $r = $s->fetch();
+        } catch (Throwable $e) { try { $this->make(); } catch (Throwable $e2) {} }
+        $this->oldId = $id;
+        if ($r) { $this->old = $r['data']; $this->oldTs = (int)$r['ts']; return $r['data']; }
+        $this->old = null;
+        return '';
     }
     public function write($id, $data): bool {
+        // Keeps the database small + cheap: no row for empty visitors, no rewrite when nothing changed
+        if ($this->old === null && $data === '') return true;
+        if ($id === $this->oldId && $this->old !== null && $data === $this->old && time() - $this->oldTs < 300) return true;
         $this->pdo->prepare("REPLACE INTO php_sessions (id, data, ts) VALUES (?,?,?)")->execute([$id, $data, time()]);
         return true;
     }
@@ -160,7 +169,7 @@ class PymDbSessionHandler implements SessionHandlerInterface {
         return true;
     }
     public function gc($max): int|false {
-        return $this->pdo->prepare("DELETE FROM php_sessions WHERE ts < ?")->execute([time() - $max]) ? 1 : 0;
+        return $this->pdo->prepare("DELETE FROM php_sessions WHERE ts < ?")->execute([time() - max((int)$max, 86400 * 7)]) ? 1 : 0;
     }
 }
 

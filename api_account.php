@@ -79,6 +79,7 @@ function issueCode($pdo, $email, $key, $purpose, $payload, $subject, $intro) {
     if ($old && time() - (int)$old['sent_at'] < 45) respond(false, 'Please wait a few seconds before requesting another code.');
     if (rlCount($pdo, 'mailip', clientIp(), 900) >= 10) respond(false, 'Too many code requests. Please wait 15 minutes and try again.');
 
+    try { $pdo->prepare("DELETE FROM email_codes WHERE expires_at < ?")->execute([time() - 3600]); } catch (Throwable $e) {}
     $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
     $pdo->prepare("DELETE FROM email_codes WHERE email_key = ? AND purpose = ?")->execute([$key, $purpose]);
     $pdo->prepare("INSERT INTO email_codes (email_key, purpose, code_hash, payload, attempts, expires_at, sent_at) VALUES (?,?,?,?,0,?,?)")
@@ -116,8 +117,7 @@ function checkCode($pdo, $key, $purpose, $code) {
 }
 function dropCode($pdo, $id) { $pdo->prepare("DELETE FROM email_codes WHERE id = ?")->execute([$id]); }
 
-ensureRateTable($pdo);
-ensureAccountSchema($pdo);
+if (empty($_SESSION['acc_ok'])) { ensureAccountSchema($pdo); $_SESSION['acc_ok'] = 1; }
 
 switch ($action) {
 

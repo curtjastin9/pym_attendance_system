@@ -42,6 +42,8 @@ switch ($action) {
         $to   = $input['to'] ?? '';
         if (!validDate($from) || !validDate($to)) respond(false, 'Please select a valid date range.');
         if ($from > $to) respond(false, 'The start date must be before the end date.');
+        if ($from < '2026-10-01') $from = '2026-10-01';
+        if ($to < $from) respond(false, 'Attendance records start on October 2026.');
         if ((strtotime($to) - strtotime($from)) > 86400 * 366 * 2) respond(false, 'Date range is too large (max 2 years).');
 
         $ids = $input['category_ids'] ?? [];
@@ -116,7 +118,7 @@ switch ($action) {
                 $slots = $pdo->query("SELECT id, name, slot_time, dow FROM groups_slots")->fetchAll();
 
                 if ($first) {
-                    $d = new DateTime(max($from, $first));
+                    $d = new DateTime(max($from, $first, '2026-10-01'));
                     $end = new DateTime($to);
                     for (; $d <= $end; $d->modify('+1 day')) {
                         $ds = $d->format('Y-m-d');

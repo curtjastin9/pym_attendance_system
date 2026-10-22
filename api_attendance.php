@@ -53,6 +53,7 @@ requireLogin();
 
 function checkSlotAccess($pdo, $slot_id, $date) {
     if (!$slot_id || !$date) respond(false, 'Please select a slot and date.');
+    if ($date < '2026-10-01') respond(false, 'Attendance starts on October 2026.');
     $s = $pdo->prepare("SELECT * FROM groups_slots WHERE id = ?");
     $s->execute([$slot_id]);
     $slot = $s->fetch();
@@ -102,7 +103,11 @@ switch ($action) {
         try {
             $pdo->beginTransaction();
             $id = nextId($pdo, 'attendance');
-            foreach ($clean as [$mid, $status, $time, $reason]) $ins->execute([$id++, $mid, $slot_id, $date, $status, $time, $reason]);
+            $del = $pdo->prepare("DELETE FROM attendance WHERE member_id = ? AND slot_id = ? AND att_date = ?");
+            foreach ($clean as [$mid, $status, $time, $reason]) {
+                if ($status === 'absent') $del->execute([$mid, $slot_id, $date]);   // absent = no row (keeps the database small)
+                else $ins->execute([$id++, $mid, $slot_id, $date, $status, $time, $reason]);
+            }
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -154,7 +159,11 @@ switch ($action) {
         try {
             $pdo->beginTransaction();
             $id = nextId($pdo, 'event_attendance');
-            foreach ($clean as [$mid, $status, $time, $reason]) $ins->execute([$id++, $mid, $event_id, $status, $time, $reason]);
+            $del = $pdo->prepare("DELETE FROM event_attendance WHERE member_id = ? AND event_id = ?");
+            foreach ($clean as [$mid, $status, $time, $reason]) {
+                if ($status === 'absent') $del->execute([$mid, $event_id]);
+                else $ins->execute([$id++, $mid, $event_id, $status, $time, $reason]);
+            }
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();

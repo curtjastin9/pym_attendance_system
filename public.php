@@ -197,6 +197,7 @@ function setRange(k){
   else if(k==='30')f=new Date(n-29*864e5);
   else if(k==='90')f=new Date(n-89*864e5);
   else{f=new Date(n.getFullYear(),0,1);t=new Date(n.getFullYear(),11,31)}
+  if(f<new Date(2026,9,1))f=new Date(2026,9,1);if(t<f)t=f;
   $('from').value=ymd(f);$('to').value=ymd(t);
 }
 
@@ -329,6 +330,7 @@ document.querySelector('.tabs').addEventListener('click',e=>{const t=e.target.cl
 $('pager').addEventListener('click',e=>{const b=e.target.closest('[data-pg]');if(b&&!b.disabled){S.page+=+b.dataset.pg;render()}});
 
 (async()=>{
+  $('from').min=$('to').min='2026-10-01';
   const [c,m]=await Promise.all([api('get_record_categories'),api('get_record_members')]);
   if(c.success){S.cats=c.data;S.catSel=new Set(c.data.map(x=>String(x.id)))}
   drawCats();

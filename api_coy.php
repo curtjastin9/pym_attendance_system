@@ -116,8 +116,7 @@ function youthExists($pdo, $id) {
     return (bool)$s->fetch();
 }
 
-ensureCoy($pdo);
-ensureUserPositionColumn($pdo);
+if (empty($_SESSION['coy_ok'])) { ensureCoy($pdo); ensureUserPositionColumn($pdo); $_SESSION['coy_ok'] = 1; }
 
 switch ($action) {
 

@@ -644,12 +644,14 @@ async function editSlot(id, isAdmin = false) {
    ============================================================ */
 let calYear  = new Date().getFullYear();
 let calMonth = new Date().getMonth() + 1;
+if (calYear * 12 + calMonth < 2026 * 12 + 10) { calYear = 2026; calMonth = 10; }
 let mySlotId = null;
 let mySlotDow = null;  // DOW (0=Sun,6=Sat) of the leader's assigned slot
 let CURRENT_ATT_DATE = null;
 
 function initAttendancePage() {
   document.getElementById('calPrevBtn').addEventListener('click', () => {
+    if (calYear * 12 + calMonth <= 2026 * 12 + 10) return;
     calMonth--; if (calMonth < 1) { calMonth = 12; calYear--; } loadCalendar();
   });
   document.getElementById('calNextBtn').addEventListener('click', () => {
@@ -739,6 +741,8 @@ async function loadCalendar() {
 
   const d = res.data;
   display.textContent = d.month_name;
+  const pb = document.getElementById('calPrevBtn');
+  if (pb) { const atMin = calYear * 12 + calMonth <= 2026 * 12 + 10; pb.disabled = atMin; pb.style.opacity = atMin ? '.35' : ''; pb.style.cursor = atMin ? 'not-allowed' : ''; }
   document.getElementById('calMonthLabel').textContent = CURRENT_USER && CURRENT_USER.role === 'leader'
     ? 'Normal Serve · Your assigned slot schedule'
     : 'Normal Serve · Sat 6PM · Sun 7AM, 8:30AM, 10AM, 5PM, 7PM';

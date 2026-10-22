@@ -5,34 +5,32 @@
  */
 function clientIp() { return $_SERVER['REMOTE_ADDR'] ?? 'unknown'; }
 
-function ensureRateTable($pdo) {
-    if (!empty($_SESSION['rl_table_ok'])) return;
-    try {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS `rate_limits` (
-            `id` int(11) NOT NULL AUTO_INCREMENT,
-            `bucket` varchar(20) NOT NULL,
-            `rkey` varchar(150) NOT NULL,
-            `hit_at` int(11) NOT NULL,
-            PRIMARY KEY (`id`),
-            KEY `idx_rl` (`bucket`,`rkey`,`hit_at`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        $_SESSION['rl_table_ok'] = 1;
-    } catch (Throwable $e) { error_log('rate table: ' . $e->getMessage()); }
+function createRateTable($pdo) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `rate_limits` (
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `bucket` varchar(20) NOT NULL,
+        `rkey` varchar(150) NOT NULL,
+        `hit_at` int(11) NOT NULL,
+        PRIMARY KEY (`id`),
+        KEY `idx_rl` (`bucket`,`rkey`,`hit_at`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 }
+/** The table is created lazily (only if a query on it fails) — no extra queries per request. */
+function ensureRateTable($pdo) { }
 function rlCount($pdo, $bucket, $key, $window) {
     try {
         $s = $pdo->prepare("SELECT COUNT(*) FROM rate_limits WHERE bucket = ? AND rkey = ? AND hit_at > ?");
         $s->execute([$bucket, substr($key, 0, 150), time() - $window]);
         return (int)$s->fetchColumn();
-    } catch (Throwable $e) { return 0; }
+    } catch (Throwable $e) { try { createRateTable($pdo); } catch (Throwable $e2) {} return 0; }
 }
 function rlHit($pdo, $bucket, $key) {
     try {
         $nid = (int)$pdo->query("SELECT COALESCE(MAX(id),0) FROM rate_limits")->fetchColumn() + 1;
         $pdo->prepare("INSERT INTO rate_limits (id, bucket, rkey, hit_at) VALUES (?,?,?,?)")
             ->execute([$nid, $bucket, substr($key, 0, 150), time()]);
-        if (random_int(1, 100) === 1) $pdo->prepare("DELETE FROM rate_limits WHERE hit_at < ?")->execute([time() - 86400]);
-    } catch (Throwable $e) { /* ignore */ }
+        if (random_int(1, 50) === 1) $pdo->prepare("DELETE FROM rate_limits WHERE hit_at < ?")->execute([time() - 86400]);
+    } catch (Throwable $e) { try { createRateTable($pdo); } catch (Throwable $e2) {} }
 }
 function rlClear($pdo, $bucket, $key) {
     try { $pdo->prepare("DELETE FROM rate_limits WHERE bucket = ? AND rkey = ?")->execute([$bucket, substr($key, 0, 150)]); }
@@ -49,7 +47,6 @@ function hasUniqueIndex($pdo, $table, array $cols) {
 
 /** Runs once per session: rate table, drop plain-text passwords, guarantee unique attendance keys. */
 function ensureSecuritySchema($pdo) {
-    ensureRateTable($pdo);
     if (!empty($_SESSION['sec_schema_ok'])) return;
 
     // 1) Never store readable passwords

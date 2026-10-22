@@ -130,6 +130,7 @@ const recByCategory = (rows) => recGroup(rows, r => r.category, r => ({ category
 
 /* ---------- Page lifecycle ---------- */
 window.loadRecordsPage = async function () {
+  recEl('recFrom').min = recEl('recTo').min = '2026-10-01';
   if (!recEl('recFrom').value || !recEl('recTo').value) recSetRange('month');
   if (!REC.catsLoaded) await loadRecCats();
   if (!REC.memLoaded) await loadRecMembers();
@@ -143,6 +144,8 @@ function recSetRange(kind) {
   else if (kind === '30') from = new Date(now.getTime() - 29 * 86400000);
   else if (kind === '90') from = new Date(now.getTime() - 89 * 86400000);
   else if (kind === 'year') { from = new Date(now.getFullYear(), 0, 1); to = new Date(now.getFullYear(), 11, 31); }
+  if (from < new Date(2026, 9, 1)) from = new Date(2026, 9, 1);
+  if (to < from) to = from;
   recEl('recFrom').value = recYmd(from);
   recEl('recTo').value = recYmd(to);
 }

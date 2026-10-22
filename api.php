@@ -4,6 +4,7 @@ header('Content-Type: application/json');
 require_once 'config.php';
 
 const MAX_LEADERS_PER_SLOT = 5;
+const CAL_START = '2026-10-01';
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $rawInput = file_get_contents('php://input');
@@ -159,17 +160,23 @@ switch ($action) {
             $todaySlots = array_values(array_filter($todaySlots, fn($s) => (int)$s['id'] === (int)$leaderSlotId));
         }
 
+        $mc = [];
+        foreach ($pdo->query("SELECT slot_id, COUNT(*) c FROM youth_members WHERE status='active' AND slot_id IS NOT NULL GROUP BY slot_id")->fetchAll() as $r) $mc[(int)$r['slot_id']] = (int)$r['c'];
+        $att = [];
+        $st2 = $pdo->prepare("SELECT slot_id, att_date, status, COUNT(*) c FROM attendance WHERE att_date >= ? GROUP BY slot_id, att_date, status");
+        $st2->execute([date('Y-m-d', strtotime('-7 day'))]);
+        foreach ($st2->fetchAll() as $r) $att[(int)$r['slot_id']][$r['att_date']][$r['status']] = (int)$r['c'];
+        $nowT = date('H:i:s');
+
         $presentToday = 0; $absentToday = 0; $services = [];
         foreach ($todaySlots as $slot) {
-            $stmt = $pdo->prepare("SELECT status, COUNT(*) c FROM attendance WHERE slot_id = ? AND att_date = ? GROUP BY status");
-            $stmt->execute([$slot['id'], $today]);
-            $p = 0; $a = 0;
-            foreach ($stmt->fetchAll() as $row) {
-                if ($row['status'] === 'present') $p = (int)$row['c'];
-                else $a = (int)$row['c'];
-            }
+            $sid = (int)$slot['id'];
+            $p = $att[$sid][$today]['present'] ?? 0;
+            $x = $att[$sid][$today]['excused'] ?? 0;
+            $m = $mc[$sid] ?? 0;
+            $a = ($nowT >= $slot['slot_time']) ? max(0, $m - $p) : $x;
             $presentToday += $p; $absentToday += $a;
-            $services[] = ['id'=>$slot['id'],'title'=>$slot['name'],'time'=>$slot['slot_time'],'type'=>'mass','present'=>$p,'absent'=>$a,'total'=>$p+$a];
+            $services[] = ['id'=>$slot['id'],'title'=>$slot['name'],'time'=>$slot['slot_time'],'type'=>'mass','present'=>$p,'absent'=>$a,'total'=>$m];
         }
 
         $data['present_today']  = $presentToday;
@@ -197,14 +204,12 @@ switch ($action) {
         $chart = [];
         for ($i = 6; $i >= 0; $i--) {
             $d = date('Y-m-d', strtotime("-$i day"));
-            if ($leaderSlotId !== null) {
-                $stmt = $pdo->prepare("SELECT COUNT(*) c FROM attendance WHERE att_date = ? AND status = 'present' AND slot_id = ?");
-                $stmt->execute([$d, $leaderSlotId]);
-            } else {
-                $stmt = $pdo->prepare("SELECT COUNT(*) c FROM attendance WHERE att_date = ? AND status = 'present'");
-                $stmt->execute([$d]);
+            $cnt = 0;
+            foreach ($att as $sid => $byDate) {
+                if ($leaderSlotId !== null && (int)$sid !== (int)$leaderSlotId) continue;
+                $cnt += $byDate[$d]['present'] ?? 0;
             }
-            $chart[] = ['date'=>$d,'label'=>date('D', strtotime($d)),'count'=>(int)$stmt->fetch()['c']];
+            $chart[] = ['date'=>$d,'label'=>date('D', strtotime($d)),'count'=>$cnt];
         }
         $data['weekly_chart'] = $chart;
 
@@ -214,25 +219,15 @@ switch ($action) {
         }
         $slotSummary = [];
         foreach ($slots as $slot) {
-            $stmt = $pdo->prepare("SELECT COUNT(*) c FROM youth_members WHERE slot_id = ? AND status='active'");
-            $stmt->execute([$slot['id']]);
-            $total = (int)$stmt->fetch()['c'];
-            $stmt = $pdo->prepare("SELECT COUNT(*) c FROM attendance WHERE slot_id = ? AND att_date = ? AND status = 'present'");
+            $sid = (int)$slot['id'];
+            $total = $mc[$sid] ?? 0;
             $diff = ((int)date('w') - (int)$slot['dow'] + 7) % 7;
             $recent = date('Y-m-d', strtotime("-$diff day"));
-            if ($diff === 0) {
-                $chk = $pdo->prepare("SELECT COUNT(*) c FROM attendance WHERE slot_id = ? AND att_date = ?");
-                $chk->execute([$slot['id'], $recent]);
-                if ((int)$chk->fetch()['c'] === 0) $recent = date('Y-m-d', strtotime('-7 day'));
-            }
-            $stmt->execute([$slot['id'], $recent]);
-            $present = (int)$stmt->fetch()['c'];
-            $gs = $pdo->prepare("SELECT status, COUNT(*) c FROM attendance WHERE slot_id = ? AND att_date = ? GROUP BY status");
-            $gs->execute([$slot['id'], $recent]);
-            $excused = 0; $recorded = 0;
-            foreach ($gs->fetchAll() as $g) { $recorded += (int)$g['c']; if ($g['status'] === 'excused') $excused = (int)$g['c']; }
+            if ($diff === 0 && $nowT < $slot['slot_time']) $recent = date('Y-m-d', strtotime('-7 day'));
+            $present = $att[$sid][$recent]['present'] ?? 0;
+            $excused = $att[$sid][$recent]['excused'] ?? 0;
             $pct = $total > 0 ? round(($present / $total) * 100) : 0;
-            $slotSummary[] = ['id'=>$slot['id'],'name'=>$slot['name'],'color'=>$slot['color'],'total'=>$total,'present'=>$present,'pct'=>$pct,'date'=>$recent,'excused'=>$excused,'recorded'=>$recorded];
+            $slotSummary[] = ['id'=>$slot['id'],'name'=>$slot['name'],'color'=>$slot['color'],'total'=>$total,'present'=>$present,'pct'=>$pct,'date'=>$recent,'excused'=>$excused,'recorded'=>1];
         }
         $data['slot_summary'] = $slotSummary;
         respond(true, '', $data);
@@ -508,6 +503,7 @@ switch ($action) {
         requireLogin();
         $year  = (int)($input['year']  ?? date('Y'));
         $month = (int)($input['month'] ?? date('n'));
+        if ($year * 12 + $month < 2026 * 12 + 10) { $year = 2026; $month = 10; }
         $firstDay = mktime(0, 0, 0, $month, 1, $year);
         $daysInMonth = (int)date('t', $firstDay);
 
@@ -516,6 +512,13 @@ switch ($action) {
         foreach ($allSlots as $s) $slotsByDow[(int)$s['dow']][] = $s;
 
         $leaderSlotId = getLeaderSlotId($pdo);
+
+        $pm = [];
+        $pst = $pdo->prepare("SELECT slot_id, att_date, COUNT(*) c FROM attendance WHERE att_date BETWEEN ? AND ? AND status='present' GROUP BY slot_id, att_date");
+        $pst->execute([date('Y-m-d', $firstDay), date('Y-m-t', $firstDay)]);
+        foreach ($pst->fetchAll() as $r) $pm[$r['slot_id'] . '|' . $r['att_date']] = (int)$r['c'];
+        $tm = [];
+        foreach ($pdo->query("SELECT slot_id, COUNT(*) c FROM youth_members WHERE status='active' AND slot_id IS NOT NULL GROUP BY slot_id")->fetchAll() as $r) $tm[(int)$r['slot_id']] = (int)$r['c'];
 
         $catByDate = [];
         if ($leaderSlotId === null) {
@@ -549,13 +552,8 @@ switch ($action) {
                 // Leaders only see their assigned slot
                 if ($leaderSlotId !== null && (int)$slot['id'] !== (int)$leaderSlotId) continue;
 
-                $stmt = $pdo->prepare("SELECT COUNT(*) c FROM attendance WHERE slot_id=? AND att_date=? AND status='present'");
-                $stmt->execute([$slot['id'], $dateStr]);
-                $present = (int)$stmt->fetch()['c'];
-
-                $stmt = $pdo->prepare("SELECT COUNT(*) c FROM youth_members WHERE slot_id=? AND status='active'");
-                $stmt->execute([$slot['id']]);
-                $total = (int)$stmt->fetch()['c'];
+                $present = $pm[$slot['id'] . '|' . $dateStr] ?? 0;
+                $total = $tm[(int)$slot['id']] ?? 0;
 
                 $slotSummary[] = ['id'=>$slot['id'],'title'=>$slot['name'],'time'=>$slot['slot_time'],'color'=>$slot['color'],'present'=>$present,'total'=>$total];
             }
