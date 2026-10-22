@@ -33,6 +33,50 @@ function purgeYouth($pdo, $ids) {
     $pdo->prepare("DELETE FROM youth_members WHERE id IN ($ph)")->execute($ids);
 }
 
+function ensureTrash($pdo) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `trash` (
+        `id` int(11) NOT NULL, `kind` varchar(10) NOT NULL, `label` varchar(150) NOT NULL,
+        `payload` mediumtext NOT NULL, `deleted_by` varchar(100) DEFAULT NULL, `deleted_at` datetime NOT NULL,
+        PRIMARY KEY (`id`), KEY `idx_del` (`deleted_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->prepare("DELETE FROM trash WHERE deleted_at < ?")->execute([date('Y-m-d H:i:s', time() - 86400 * 30)]);
+}
+function trashSave($pdo, $kind, $label, $payload) {
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($json === false) throw new RuntimeException('Could not create backup.');
+    $id = nextId($pdo, 'trash');
+    $pdo->prepare("INSERT INTO trash (id, kind, label, payload, deleted_by, deleted_at) VALUES (?,?,?,?,?,?)")
+        ->execute([$id, $kind, substr($label, 0, 150), $json, $_SESSION['full_name'] ?? '', date('Y-m-d H:i:s')]);
+}
+function snapshotYouth($pdo, $id) {
+    $s = $pdo->prepare("SELECT * FROM youth_members WHERE id = ?"); $s->execute([$id]);
+    $m = $s->fetch();
+    if (!$m) return null;
+    $out = ['member' => $m];
+    foreach (['attendance', 'event_attendance', 'coy_holders', 'coy_committee_members'] as $t) {
+        try { $q = $pdo->prepare("SELECT * FROM `$t` WHERE member_id = ?"); $q->execute([$id]); $out[$t] = $q->fetchAll(); }
+        catch (Throwable $e) { $out[$t] = []; }
+    }
+    return $out;
+}
+function restoreRows($pdo, $table, $rows) {
+    foreach ((array)$rows as $r) {
+        if (!is_array($r) || !$r) continue;
+        $cols = array_keys($r);
+        try {
+            $pdo->prepare("INSERT IGNORE INTO `$table` (`" . implode('`,`', $cols) . "`) VALUES (" . implode(',', array_fill(0, count($cols), '?')) . ")")->execute(array_values($r));
+        } catch (Throwable $e) { error_log("restore $table: " . $e->getMessage()); }
+    }
+}
+function restoreYouth($pdo, $p) {
+    restoreRows($pdo, 'youth_members', [$p['member']]);
+    foreach (['attendance', 'event_attendance', 'coy_holders', 'coy_committee_members'] as $t) restoreRows($pdo, $t, $p[$t] ?? []);
+}
+function userLabel($pdo, $id) {
+    $s = $pdo->prepare("SELECT full_name, username FROM users WHERE id = ?"); $s->execute([$id]);
+    $r = $s->fetch();
+    return $r ? $r['full_name'] . ' (' . $r['username'] . ')' : 'User #' . $id;
+}
+
 function currentUser() {
     if (!isset($_SESSION['user_id'])) return null;
     return [
@@ -293,15 +337,20 @@ switch ($action) {
         requireLogin();
         $id = $input['id'] ?? 0;
         if (getLeaderSlotId($pdo) !== null) respond(false, 'Only the Secretariat can delete members. Use remove from slot instead.');
+        ensureTrash($pdo);
+        $snap = snapshotYouth($pdo, (int)$id);
+        if (!$snap) respond(false, 'Member not found.');
         try {
             $pdo->beginTransaction();
+            trashSave($pdo, 'youth', $snap['member']['full_name'], $snap);
             purgeYouth($pdo, [$id]);
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             respond(false, 'Failed to delete member: ' . $e->getMessage());
         }
-        respond(true, 'Member and all their records deleted.');
+        logActivity($pdo, 'delete_youth', $snap['member']['full_name'], 'Moved to Recycle Bin with ' . count($snap['attendance']) . ' slot and ' . count($snap['event_attendance']) . ' event attendance record(s)');
+        respond(true, 'Member moved to the Recycle Bin (can be restored for 30 days).');
     }
 
     case 'get_events': {
@@ -334,9 +383,11 @@ switch ($action) {
     case 'delete_event': {
         requireSecretariat();
         $id = $input['id'] ?? 0;
+        $en = $pdo->prepare("SELECT title, event_date FROM events WHERE id=?"); $en->execute([$id]); $evr = $en->fetch();
         $pdo->prepare("DELETE FROM event_attendance WHERE event_id=?")->execute([$id]);
         $stmt = $pdo->prepare("DELETE FROM events WHERE id=?");
         $stmt->execute([$id]);
+        logActivity($pdo, 'delete_event', $evr ? $evr['title'] . ' · ' . $evr['event_date'] : 'Event #' . $id, 'Event and its attendance deleted');
         respond(true, 'Event deleted.');
     }
 
@@ -424,6 +475,7 @@ switch ($action) {
             respond(false, 'Failed to save slot. Please try again.');
         }
 
+        logActivity($pdo, 'save_slot', 'Slot #' . $id, 'Leaders set: ' . ($leader_ids ? implode(', ', array_map(fn($x) => userLabel($pdo, $x), $leader_ids)) : 'none'));
         respond(true, 'Slot updated successfully.');
     }
 
@@ -687,6 +739,7 @@ switch ($action) {
         $id = $input['id'] ?? 0;
         $stmt = $pdo->prepare("UPDATE users SET status='approved' WHERE id=?");
         $stmt->execute([$id]);
+        logActivity($pdo, 'approve_user', userLabel($pdo, $id));
         respond(true, 'User approved successfully.');
     }
 
@@ -695,6 +748,7 @@ switch ($action) {
         $id = $input['id'] ?? 0;
         $stmt = $pdo->prepare("UPDATE users SET status='rejected' WHERE id=?");
         $stmt->execute([$id]);
+        logActivity($pdo, 'reject_user', userLabel($pdo, $id));
         respond(true, 'User rejected.');
     }
 
@@ -722,6 +776,7 @@ switch ($action) {
                 $stmt = $pdo->prepare("UPDATE users SET full_name=?, username=?, role=?, slot_id=?, status=? WHERE id=?");
                 $stmt->execute([$full_name, $username, $role, $slot_id, $status, $id]);
             }
+            logActivity($pdo, 'save_user', $full_name . ' (' . $username . ')', "Updated: role=$role, status=$status" . ($password !== '' ? ', password changed' : ''));
             respond(true, 'User updated successfully.');
         } else {
             if ($password === '' || strlen($password) < 6) respond(false, 'Password is required and must be at least 6 characters.');
@@ -731,6 +786,7 @@ switch ($action) {
             $hash = password_hash($password, PASSWORD_BCRYPT);
             $stmt = $pdo->prepare("INSERT INTO users (id, full_name, username, password, role, slot_id, status) VALUES (?,?,?,?,?,?,?)");
             $stmt->execute([nextId($pdo, 'users'), $full_name, $username, $hash, $role, $slot_id, $status]);
+            logActivity($pdo, 'save_user', $full_name . ' (' . $username . ')', "Created: role=$role, status=$status");
             respond(true, 'User added successfully.');
         }
     }
@@ -744,8 +800,15 @@ switch ($action) {
         $stmt->execute([$id]);
         $u = $stmt->fetch();
         if (!$u) respond(false, 'User not found.');
+        ensureTrash($pdo);
+        $m = $pdo->prepare("SELECT id FROM youth_members WHERE LOWER(TRIM(full_name)) = ?");
+        $m->execute([strtolower(trim($u['full_name']))]);
+        $yids = $m->fetchAll(PDO::FETCH_COLUMN);
+        $sl = $pdo->prepare("SELECT * FROM slot_leaders WHERE user_id=?"); $sl->execute([$id]);
+        $snapU = ['user' => $u, 'slot_leaders' => $sl->fetchAll(), 'youth' => array_values(array_filter(array_map(fn($y) => snapshotYouth($pdo, (int)$y), $yids)))];
         try {
             $pdo->beginTransaction();
+            trashSave($pdo, 'user', $u['full_name'], $snapU);
             $pdo->prepare("DELETE FROM slot_leaders WHERE user_id=?")->execute([$id]);
             $pdo->prepare("UPDATE groups_slots SET leader_id = NULL WHERE leader_id=?")->execute([$id]);
             if (!empty($u['email_key'])) {
@@ -753,16 +816,88 @@ switch ($action) {
             }
             try { $pdo->prepare("DELETE FROM rate_limits WHERE bucket='login' AND rkey LIKE ?")->execute(['%|' . strtolower($u['username'])]); } catch (Throwable $e) {}
             try { $pdo->prepare("DELETE FROM php_sessions WHERE data LIKE ?")->execute(['%user_id|i:' . $id . ';%']); } catch (Throwable $e) {}
-            $m = $pdo->prepare("SELECT id FROM youth_members WHERE LOWER(TRIM(full_name)) = ?");
-            $m->execute([strtolower(trim($u['full_name']))]);
-            purgeYouth($pdo, $m->fetchAll(PDO::FETCH_COLUMN));
+            purgeYouth($pdo, $yids);
             $pdo->prepare("DELETE FROM users WHERE id=?")->execute([$id]);
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             respond(false, 'Failed to delete user: ' . $e->getMessage());
         }
-        respond(true, 'User and all their records deleted.');
+        logActivity($pdo, 'delete_user', $u['full_name'] . ' (' . $u['username'] . ')', 'Moved to Recycle Bin' . ($yids ? ' with ' . count($yids) . ' linked youth record(s)' : ''));
+        respond(true, 'User moved to the Recycle Bin (can be restored for 30 days).');
+    }
+
+    case 'get_activity': {
+        requireSecretariat();
+        $q = trim($input['q'] ?? '');
+        $lim = min(500, max(20, (int)($input['limit'] ?? 100)));
+        try {
+            $st = $pdo->prepare("SELECT id, user_name, role, action, target, details, created_at FROM activity_log WHERE (? = '' OR CONCAT_WS(' ', user_name, action, target, details) LIKE ?) ORDER BY id DESC LIMIT $lim");
+            $st->execute([$q, '%' . $q . '%']);
+            respond(true, '', $st->fetchAll());
+        } catch (Throwable $e) {
+            try { createActivityTable($pdo); } catch (Throwable $e2) {}
+            respond(true, '', []);
+        }
+    }
+
+    case 'get_trash': {
+        requireSecretariat();
+        ensureTrash($pdo);
+        respond(true, '', $pdo->query("SELECT id, kind, label, deleted_by, deleted_at FROM trash ORDER BY id DESC")->fetchAll());
+    }
+
+    case 'restore_trash': {
+        requireSecretariat();
+        ensureTrash($pdo);
+        $tid = (int)($input['id'] ?? 0);
+        $st = $pdo->prepare("SELECT * FROM trash WHERE id = ?"); $st->execute([$tid]);
+        $t = $st->fetch();
+        if (!$t) respond(false, 'Item not found or already expired.');
+        $p = json_decode($t['payload'], true);
+        if (!is_array($p)) respond(false, 'The backup data is damaged.');
+        $ex = $pdo->prepare("SELECT id FROM youth_members WHERE id = ?");
+        if ($t['kind'] === 'youth') {
+            $ex->execute([(int)$p['member']['id']]);
+            if ($ex->fetch()) respond(false, 'This member already exists.');
+        } else {
+            $c = $pdo->prepare("SELECT id FROM users WHERE id = ? OR username = ?");
+            $c->execute([(int)$p['user']['id'], $p['user']['username']]);
+            if ($c->fetch()) respond(false, 'A user with this username or ID already exists.');
+        }
+        try {
+            $pdo->beginTransaction();
+            if ($t['kind'] === 'youth') {
+                restoreYouth($pdo, $p);
+            } else {
+                restoreRows($pdo, 'users', [$p['user']]);
+                restoreRows($pdo, 'slot_leaders', $p['slot_leaders'] ?? []);
+                foreach (($p['slot_leaders'] ?? []) as $r) {
+                    $pdo->prepare("UPDATE groups_slots SET leader_id = ? WHERE id = ? AND leader_id IS NULL")->execute([$r['user_id'], $r['slot_id']]);
+                }
+                foreach (($p['youth'] ?? []) as $y) {
+                    $ex->execute([(int)$y['member']['id']]);
+                    if (!$ex->fetch()) restoreYouth($pdo, $y);
+                }
+            }
+            $pdo->prepare("DELETE FROM trash WHERE id = ?")->execute([$tid]);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            respond(false, 'Restore failed: ' . $e->getMessage());
+        }
+        logActivity($pdo, 'restore', $t['label'], 'Restored ' . $t['kind'] . ' from Recycle Bin');
+        respond(true, '"' . $t['label'] . '" restored.');
+    }
+
+    case 'purge_trash': {
+        requireSecretariat();
+        $tid = (int)($input['id'] ?? 0);
+        $st = $pdo->prepare("SELECT label FROM trash WHERE id = ?"); $st->execute([$tid]);
+        $lbl = $st->fetchColumn();
+        $pdo->prepare("DELETE FROM trash WHERE id = ?")->execute([$tid]);
+        logActivity($pdo, 'purge', (string)$lbl, 'Permanently deleted from Recycle Bin');
+        respond(true, 'Permanently deleted.');
     }
 
     case 'get_categories': {
@@ -803,6 +938,7 @@ switch ($action) {
         $pdo->prepare("DELETE FROM event_attendance WHERE event_id IN (SELECT id FROM events WHERE category_id = ?)")->execute([$id]);
         $pdo->prepare("DELETE FROM events WHERE category_id = ?")->execute([$id]);
         $pdo->prepare("DELETE FROM event_categories WHERE id = ?")->execute([$id]);
+        logActivity($pdo, 'delete_category', 'Category #' . $id, 'Category, its events and their attendance deleted');
         respond(true, 'Category and its events deleted.');
     }
 

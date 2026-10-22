@@ -73,3 +73,36 @@ function ensureSecuritySchema($pdo) {
     }
     $_SESSION['sec_schema_ok'] = 1;
 }
+
+/* ---------- Activity log ---------- */
+function createActivityTable($pdo) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `activity_log` (
+        `id` int(11) NOT NULL,
+        `user_id` int(11) NOT NULL DEFAULT 0,
+        `user_name` varchar(100) DEFAULT NULL,
+        `role` varchar(20) DEFAULT NULL,
+        `action` varchar(40) NOT NULL,
+        `target` varchar(150) DEFAULT NULL,
+        `details` text DEFAULT NULL,
+        `created_at` datetime NOT NULL,
+        PRIMARY KEY (`id`),
+        KEY `idx_created` (`created_at`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+function actCut($s, $n) { $s = (string)$s; return function_exists('mb_substr') ? mb_substr($s, 0, $n) : substr($s, 0, $n); }
+/** Never throws. Call AFTER a transaction is committed. */
+function logActivity($pdo, $action, $target = '', $details = '') {
+    $row = [(int)($_SESSION['user_id'] ?? 0), actCut($_SESSION['full_name'] ?? '', 100), actCut($_SESSION['role'] ?? '', 20),
+            actCut($action, 40), actCut($target, 150), actCut($details, 2000), date('Y-m-d H:i:s')];
+    for ($i = 0; $i < 2; $i++) {
+        try {
+            $id = (int)$pdo->query("SELECT COALESCE(MAX(id),0) FROM activity_log")->fetchColumn() + 1;
+            $pdo->prepare("INSERT INTO activity_log (id,user_id,user_name,role,action,target,details,created_at) VALUES (?,?,?,?,?,?,?,?)")
+                ->execute(array_merge([$id], $row));
+            if (random_int(1, 50) === 1) $pdo->prepare("DELETE FROM activity_log WHERE created_at < ?")->execute([date('Y-m-d H:i:s', time() - 86400 * 180)]);
+            return;
+        } catch (Throwable $e) {
+            if ($i === 0) { try { createActivityTable($pdo); } catch (Throwable $e2) { return; } }
+        }
+    }
+}

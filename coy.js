@@ -493,7 +493,9 @@ function editYouth(id, list) {
 
 async function deleteYouth(id) {
   if (isSecretariatUser()) {
-    if (!confirm('Delete this member? Their attendance records will also be removed.')) return;
+    const row = document.querySelector('#youthTableBody .delete-btn[data-id="' + id + '"]');
+    const nm = row ? row.closest('tr').children[0].textContent.trim() : '';
+    if (!askTypeName(nm, 'this member and their attendance')) return;
     const res = await apiCall('delete_youth', { id });
     alert(res.message);
     if (res.success) loadYouth();

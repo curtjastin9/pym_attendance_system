@@ -909,5 +909,6 @@ Pedro Reyes&#9;inactive"></textarea>
 <script src="records.js"></script>
 <script src="excused.js"></script>
 <script src="mobile.js"></script>
+<script src="activity.js"></script>
 </body>
 </html>

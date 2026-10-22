@@ -2,6 +2,7 @@
 require_once __DIR__ . '/session.php';
 header('Content-Type: application/json');
 require_once 'config.php';
+require_once 'security.php';
 
 $action = $_GET['action'] ?? '';
 $input  = json_decode(file_get_contents('php://input'), true);
@@ -83,6 +84,11 @@ switch ($action) {
         $date    = $input['date'] ?? '';
         $records = $input['records'] ?? [];
         checkSlotAccess($pdo, $slot_id, $date);
+        if (leaderSlotId($pdo) !== null) {
+            if ($date < date('Y-m-d', strtotime('-6 day')) || $date > date('Y-m-d'))
+                respond(false, 'Slot leaders can only mark attendance for the last 7 days. Please ask the Secretariat to make this change.');
+        }
+        $names = [];
         if (!is_array($records)) $records = [];
 
         $chk  = $pdo->prepare("SELECT full_name, slot_id FROM youth_members WHERE id = ?");
@@ -92,12 +98,23 @@ switch ($action) {
             $chk->execute([$mid]);
             $m = $chk->fetch();
             if (!$m || (int)$m['slot_id'] !== $slot_id) continue;
+            $names[$mid] = $m['full_name'];
             if ($status === 'excused' && ($reason === null || $reason === '')) {
                 respond(false, 'Please type the reason for ' . $m['full_name'] . ' (Excused).');
             }
             $clean[] = [$mid, $status, $time, $reason];
         }
 
+        $old = [];
+        $os = $pdo->prepare("SELECT member_id, status FROM attendance WHERE slot_id = ? AND att_date = ?");
+        $os->execute([$slot_id, $date]);
+        foreach ($os->fetchAll() as $o) $old[(int)$o['member_id']] = $o['status'];
+        $chg = []; $cnt = ['present' => 0, 'excused' => 0, 'absent' => 0];
+        foreach ($clean as [$mid, $status]) {
+            $cnt[$status]++;
+            $was = $old[$mid] ?? 'absent';
+            if ($was !== $status) $chg[] = ($names[$mid] ?? $mid) . ': ' . $was . ' → ' . $status;
+        }
         $ins = $pdo->prepare("INSERT INTO attendance (id, member_id, slot_id, att_date, status, time_in, reason) VALUES (?,?,?,?,?,?,?)
             ON DUPLICATE KEY UPDATE status = VALUES(status), time_in = VALUES(time_in), reason = VALUES(reason)");
         try {
@@ -113,6 +130,11 @@ switch ($action) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             error_log('save_slot_attendance: ' . $e->getMessage());
             respond(false, 'Failed to save attendance: ' . $e->getMessage());
+        }
+        if ($chg) {
+            $sn = $pdo->prepare("SELECT name FROM groups_slots WHERE id = ?"); $sn->execute([$slot_id]);
+            logActivity($pdo, 'attendance', ($sn->fetchColumn() ?: 'Slot') . ' · ' . $date,
+                'Present ' . $cnt['present'] . ', Excused ' . $cnt['excused'] . ', Absent ' . $cnt['absent'] . ' — ' . count($chg) . ' change(s): ' . implode('; ', $chg));
         }
         respond(true, 'Attendance saved successfully.');
     }
@@ -154,6 +176,23 @@ switch ($action) {
             $clean[] = [$mid, $status, $time, $reason];
         }
 
+        $nmap = [];
+        if ($clean) {
+            $ids = array_map(fn($c) => (int)$c[0], $clean);
+            $q = $pdo->prepare("SELECT id, full_name FROM youth_members WHERE id IN (" . implode(',', array_fill(0, count($ids), '?')) . ")");
+            $q->execute($ids);
+            foreach ($q->fetchAll() as $r) $nmap[(int)$r['id']] = $r['full_name'];
+        }
+        $old = [];
+        $os = $pdo->prepare("SELECT member_id, status FROM event_attendance WHERE event_id = ?");
+        $os->execute([$event_id]);
+        foreach ($os->fetchAll() as $o) $old[(int)$o['member_id']] = $o['status'];
+        $chg = []; $cnt = ['present' => 0, 'excused' => 0, 'absent' => 0];
+        foreach ($clean as [$mid, $status]) {
+            $cnt[$status]++;
+            $was = $old[$mid] ?? 'absent';
+            if ($was !== $status) $chg[] = ($nmap[$mid] ?? $mid) . ': ' . $was . ' → ' . $status;
+        }
         $ins = $pdo->prepare("INSERT INTO event_attendance (id, member_id, event_id, status, time_in, reason) VALUES (?,?,?,?,?,?)
             ON DUPLICATE KEY UPDATE status = VALUES(status), time_in = VALUES(time_in), reason = VALUES(reason)");
         try {
@@ -169,6 +208,12 @@ switch ($action) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             error_log('save_event_att: ' . $e->getMessage());
             respond(false, 'Failed to save attendance: ' . $e->getMessage());
+        }
+        if ($chg) {
+            $en = $pdo->prepare("SELECT title, event_date FROM events WHERE id = ?"); $en->execute([$event_id]);
+            $e = $en->fetch();
+            logActivity($pdo, 'event_attendance', ($e ? $e['title'] . ' · ' . $e['event_date'] : 'Event #' . $event_id),
+                'Present ' . $cnt['present'] . ', Excused ' . $cnt['excused'] . ', Absent ' . $cnt['absent'] . ' — ' . count($chg) . ' change(s): ' . implode('; ', $chg));
         }
         respond(true, 'Attendance saved successfully.');
     }

@@ -17,6 +17,10 @@ function requireSecretariat() {
     if (!isset($_SESSION['user_id'])) respond(false, 'Your session has expired. Please log in again.');
     if (($_SESSION['role'] ?? '') !== 'secretariat') respond(false, 'You do not have permission to perform this action.');
 }
+function uname($pdo, $id) {
+    $s = $pdo->prepare("SELECT full_name FROM users WHERE id = ?"); $s->execute([$id]);
+    return (string)($s->fetchColumn() ?: ('User #' . $id));
+}
 function nextId($pdo, $table) {
     return (int)$pdo->query("SELECT COALESCE(MAX(id),0) FROM `$table`")->fetchColumn() + 1;
 }
@@ -125,7 +129,7 @@ switch ($action) {
         $full = trim($input['full_name'] ?? '');
         $user = trim($input['username'] ?? '');
         $pass = (string)($input['password'] ?? '');
-        $role = $input['role'] ?? 'leader';
+        $role = 'leader'; // everyone registers as a Slot Leader; only the Secretariat can promote
         if ($full === '' || $user === '' || $pass === '') respond(false, 'Please fill in all required fields.');
         if (strlen($full) > 100 || strlen($user) > 50) respond(false, 'Name or username is too long.');
         if (strlen($pass) < 6) respond(false, 'Password must be at least 6 characters long.');
@@ -214,6 +218,7 @@ switch ($action) {
         $s->execute([$id]);
         if (!$s->fetch()) respond(false, 'User not found.');
         $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([password_hash($pass, PASSWORD_BCRYPT), $id]);
+        logActivity($pdo, 'set_password', uname($pdo, $id), 'Password changed by admin');
         respond(true, 'Password updated.');
     }
 
@@ -226,6 +231,7 @@ switch ($action) {
         $raw = trim((string)($input['email'] ?? ''));
         if ($raw === '') {
             $pdo->prepare("UPDATE users SET email = NULL, email_key = NULL WHERE id = ?")->execute([$id]);
+            logActivity($pdo, 'set_email', uname($pdo, $id), 'Email removed');
             respond(true, 'Email removed.');
         }
         [$email, $key] = needEmail($raw);
@@ -233,6 +239,7 @@ switch ($action) {
         try {
             $pdo->prepare("UPDATE users SET email = ?, email_key = ? WHERE id = ?")->execute([$email, $key, $id]);
         } catch (Throwable $e) { respond(false, 'That Gmail is already used by another account.'); }
+        logActivity($pdo, 'set_email', uname($pdo, $id), 'Email set to ' . $email);
         respond(true, 'Email updated.');
     }
 

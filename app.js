@@ -3,6 +3,12 @@
    ============================================================ */
 
 const API = 'api.php';
+function askTypeName(name, what) {
+  const t = prompt('This moves ' + what + ' to the Recycle Bin (restorable for 30 days).\n\nType the name exactly to confirm:\n' + name);
+  if (t === null) return false;
+  if (!name || t.trim().toLowerCase() !== String(name).trim().toLowerCase()) { alert('The name did not match. Nothing was deleted.'); return false; }
+  return true;
+}
 (function(){const st=document.createElement('style');st.textContent='.cal-cat-dot{background:#FEF3C7!important;border-color:#FCD34D!important}.cal-cat-dot .cal-cat-title{font-weight:700;color:#92400E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}.cal-cat-dot:hover{background:#D97706!important;border-color:#D97706!important}.cal-cat-dot:hover .cal-cat-title{color:#fff}';document.head.appendChild(st);})();
 
 async function apiCall(action, payload = null) {
@@ -1037,7 +1043,8 @@ function editUser(id) {
 }
 
 async function deleteUser(id) {
-  if (!confirm('Delete this user and ALL their records (registration, slot assignment, matching youth member and attendance)?')) return;
+  const u0 = ALL_USERS.find(x => String(x.id) === String(id));
+  if (!askTypeName(u0 ? u0.full_name : '', 'this user and the linked youth record')) return;
   const res = await apiCall('delete_user', { id });
   alert(res.message);
   if (res.success) loadUsers();

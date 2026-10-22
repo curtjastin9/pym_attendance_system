@@ -74,17 +74,11 @@ if (isset($_SESSION['user_id'])) {
         <label>Password</label>
         <input type="password" name="password" placeholder="At least 6 characters" required/>
 
-        <label>Role</label>
-        <select name="role">
-          <option value="leader">Slot Leader</option>
-          <option value="secretariat">Secretariat</option>
-        </select>
-
         <button type="submit" class="auth-btn">
           <i class="fas fa-paper-plane"></i> Send Verification Code
         </button>
 
-        <p class="auth-hint">We'll email a code to confirm your Gmail. After that, the Secretariat must approve your account. One Gmail = one account.</p>
+        <p class="auth-hint">We'll email a code to confirm your Gmail. After that, the Secretariat must approve your account (new accounts are Slot Leaders). One Gmail = one account.</p>
       </form>
 
       <!-- VERIFY CODE -->

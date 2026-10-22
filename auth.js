@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const res = await busy(reg, 'Sending code...', () => api('register_request', {
       full_name: reg.full_name.value.trim(), username: reg.username.value.trim(),
-      email: reg.email.value.trim(), password: reg.password.value, role: reg.role.value
+      email: reg.email.value.trim(), password: reg.password.value
     }));
     if (!res.success) return msg(res.message, true);
     pendingEmail = res.data.email;
