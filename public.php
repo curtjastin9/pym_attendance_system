@@ -173,6 +173,7 @@ footer{text-align:center;color:rgba(255,255,255,.4);font-size:12.5px;padding:10p
 <footer>MQAP – PYM Attendance System · Parish Youth Ministry</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="export.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -289,25 +290,9 @@ function sheet(aoa){
 }
 function download(){
   if(!S.f.length)return alert('There is nothing to download.');
-  if(typeof XLSX==='undefined')return alert('The Excel library could not load. Check your connection and refresh.');
-  const rows=S.f,s=stats(rows),wb=XLSX.utils.book_new(),st=$('status').value;
-  const byMember=group(rows,r=>r.member,r=>({member:r.member,slot:r.slot||''})).sort((a,b)=>a.member.localeCompare(b.member));
-  const byEvent=group(rows,r=>r.date+'|'+r.category+'|'+r.event,r=>({date:r.date,category:r.category,event:r.event,time:r.event_time}));
-  const byCat=group(rows,r=>r.category,r=>({category:r.category}));
+  if(typeof XLSX==='undefined'||typeof pymBuildWorkbook==='undefined')return alert('The Excel library could not load. Check your connection and refresh.');
   const memberLabel=S.memSel.size?S.members.filter(m=>S.memSel.has(String(m.id))).map(m=>m.full_name).join(', '):'All members';
-  XLSX.utils.book_append_sheet(wb,sheet([
-    ['MQAP - PYM Attendance Records'],[],
-    ['Date range',S.meta.from+' to '+S.meta.to],['Categories',S.meta.cats.join(', ')],['Members',memberLabel],['Status filter',st||'All'],
-    ['Generated',new Date().toLocaleString('en-US')],[],
-    ['Total records',s.total],['Present',s.present],['Absent (incl. excused)',s.absent],['  of which Excused',s.excused],['Attendance rate (%)',s.rate],['Events',s.events],['Members',s.members],[],
-    ['By Category'],['Category','Present','Absent (incl. Excused)','of which Excused','Total','Attendance (%)'],
-    ...byCat.map(c=>[c.category,c.present,c.absent,c.excused,c.total,c.rate])]),'Summary');
-  XLSX.utils.book_append_sheet(wb,sheet([['Date','Category','Event','Event Time','Member','Slot','Status','Time In'],
-    ...rows.map(r=>[r.date,r.category,r.event,fmtTime(r.event_time),r.member,r.slot||'',r.status.charAt(0).toUpperCase()+r.status.slice(1),fmtTime(r.time_in)])]),'Records');
-  XLSX.utils.book_append_sheet(wb,sheet([['Member','Slot','Present','Absent (incl. Excused)','of which Excused','Total','Attendance (%)'],
-    ...byMember.map(m=>[m.member,m.slot,m.present,m.absent,m.excused,m.total,m.rate])]),'Member Summary');
-  XLSX.utils.book_append_sheet(wb,sheet([['Date','Category','Event','Time','Present','Absent (incl. Excused)','of which Excused','Total','Attendance (%)'],
-    ...byEvent.map(e=>[e.date,e.category,e.event,fmtTime(e.time),e.present,e.absent,e.excused,e.total,e.rate])]),'Event Summary');
+  const wb=pymBuildWorkbook({rows:S.f,from:S.meta.from,to:S.meta.to,categories:S.meta.cats,cats:S.cats,memberLabel,statusFilter:$('status').value,includeReason:false});
   XLSX.writeFile(wb,`PYM_Attendance_${S.meta.from}_to_${S.meta.to}.xlsx`);
 }
 $('dl').onclick=download;

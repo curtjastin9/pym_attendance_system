@@ -296,51 +296,11 @@ function recSheet(aoa, minW = 8) {
 
 function recExport() {
   if (!REC.filtered.length) { alert('There is nothing to export.'); return; }
-  if (typeof XLSX === 'undefined') { alert('The Excel library could not be loaded. Check your internet connection and refresh the page.'); return; }
-
-  const rows = REC.filtered;
-  const s = recStats(rows);
-  const wb = XLSX.utils.book_new();
-  const statusFilter = recEl('recStatus').value;
-
-  const summary = [
-    ['PYM Attendance Records'],
-    [],
-    ['Date range', `${REC.meta.from} to ${REC.meta.to}`],
-    ['Categories', REC.meta.categories.join(', ')],
-    ['Members', REC.meta.memberLabel],
-    ['Status filter', statusFilter ? statusFilter : 'All'],
-    ['Generated', new Date().toLocaleString('en-US')],
-    [],
-    ['Total records', s.total],
-    ['Present', s.present],
-    ['Absent', s.absent],
-    ['  of which Excused', s.excused],
-    ['Attendance rate (%)', s.rate],
-    ['Events', s.events],
-    ['Members', s.members],
-    [],
-    ['By Category'],
-    ['Category', 'Events', 'Present', 'Absent (incl. Excused)', 'of which Excused', 'Total', 'Attendance (%)'],
-    ...recByCategory(rows).map(c => [c.category, c.events, c.present, c.absent, c.excused, c.total, c.rate])
-  ];
-  XLSX.utils.book_append_sheet(wb, recSheet(summary, 14), 'Summary');
-
-  XLSX.utils.book_append_sheet(wb, recSheet([
-    ['Date', 'Category', 'Event', 'Event Time', 'Member', 'Slot', 'Status', 'Time In', 'Reason'],
-    ...rows.map(r => [r.date, r.category, r.event, recTime(r.event_time), r.member, r.slot || '', r.status.charAt(0).toUpperCase() + r.status.slice(1), recTime(r.time_in), r.reason || ''])
-  ]), 'Records');
-
-  XLSX.utils.book_append_sheet(wb, recSheet([
-    ['Member', 'Slot', 'Present', 'Absent (incl. Excused)', 'of which Excused', 'Total', 'Attendance (%)'],
-    ...recByMember(rows).map(m => [m.member, m.slot, m.present, m.absent, m.excused, m.total, m.rate])
-  ]), 'Member Summary');
-
-  XLSX.utils.book_append_sheet(wb, recSheet([
-    ['Date', 'Category', 'Event', 'Time', 'Present', 'Absent (incl. Excused)', 'of which Excused', 'Total', 'Attendance (%)'],
-    ...recByEvent(rows).map(e => [e.date, e.category, e.event, recTime(e.time), e.present, e.absent, e.excused, e.total, e.rate])
-  ]), 'Event Summary');
-
+  if (typeof XLSX === 'undefined' || typeof pymBuildWorkbook === 'undefined') { alert('The Excel library could not be loaded. Check your internet connection and refresh the page.'); return; }
+  const wb = pymBuildWorkbook({
+    rows: REC.filtered, from: REC.meta.from, to: REC.meta.to, categories: REC.meta.categories, cats: REC.cats,
+    memberLabel: REC.meta.memberLabel, statusFilter: recEl('recStatus').value, includeReason: true
+  });
   XLSX.writeFile(wb, `PYM_Attendance_${REC.meta.from}_to_${REC.meta.to}.xlsx`);
 }
 
