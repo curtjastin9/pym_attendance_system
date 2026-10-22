@@ -173,7 +173,7 @@ footer{text-align:center;color:rgba(255,255,255,.4);font-size:12.5px;padding:10p
 <footer>MQAP – PYM Attendance System · Parish Youth Ministry</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="export.js"></script>
+<script src="export.js?v=3"></script>
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

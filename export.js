@@ -67,8 +67,60 @@
       ['LEGEND'], ['P', 'Present'], ['A', 'Absent'], ['E', 'Excused (reason in the "Excused Details" sheet)'], ['(blank)', 'No record for that member on that date'], [],
       ['BY CATEGORY'], ['Category', 'Sessions', 'Present', 'Absent (incl. Excused)', 'of which Excused', 'Total', 'Attendance (%)'],
       ...byCat.map(c => [c.category, c.events, c.present, c.absent, c.excused, c.total, c.rate]), [],
-      ['SHEETS IN THIS FILE'], ['One register per Normal Serve slot / special-event category (members × dates)'], ['Member Summary · Event Summary · Records (full list)'],
+      ['SHEETS IN THIS FILE'], ['Attendance Sheet: every member (names, grouped by slot) × every date, like a class register'], ['One register per slot / special-event category · Member Summary · Event Summary · Records (full list)'],
     ], [26, 28, 12, 22, 18, 10, 16]), 'Summary');
+
+    /* ---- Master attendance sheet: names x dates, grouped by slot ---- */
+    (function () {
+      const colMap = new Map();
+      rows.forEach(r => {
+        const isSys = sys.has(r.category), k = isSys ? 'S|' + r.date : 'C|' + r.date + '|' + r.event;
+        if (!colMap.has(k)) colMap.set(k, { k, date: r.date, sys: isSys, event: r.event });
+      });
+      const cols = [...colMap.values()].sort((a, b) => a.date.localeCompare(b.date) || ((b.sys ? 1 : 0) - (a.sys ? 1 : 0)) || String(a.event).localeCompare(String(b.event)));
+      const idx = new Map(cols.map((c, i) => [c.k, i]));
+      const mem = new Map(), gOrder = [];
+      rows.forEach(r => {
+        const isSys = sys.has(r.category), id = r.member_id != null ? r.member_id : r.member;
+        if (!mem.has(id)) mem.set(id, { name: r.member, home: '', ev: '', cells: Array(cols.length).fill(''), p: 0, a: 0, e: 0 });
+        const m = mem.get(id);
+        if (isSys && !m.home) m.home = r.slot || '';
+        if (!isSys && !m.ev) m.ev = r.slot || '';
+        m.cells[idx.get(isSys ? 'S|' + r.date : 'C|' + r.date + '|' + r.event)] = MARK[r.status] || 'A';
+        if (r.status === 'present') m.p++; else if (r.status === 'excused') m.e++; else m.a++;
+      });
+      const all = [...mem.values()];
+      all.forEach(m => { m.group = m.home || m.ev || 'No slot'; });
+      rows.forEach(r => { const g = (sys.has(r.category) ? r.slot : '') || ''; if (g && !gOrder.includes(g)) gOrder.push(g); });
+      all.forEach(m => { if (!gOrder.includes(m.group)) gOrder.push(m.group); });
+      gOrder.sort((a, b) => (a === 'No slot') - (b === 'No slot'));
+      const by = new Map();
+      all.sort((a, b) => a.name.localeCompare(b.name)).forEach(m => { if (!by.has(m.group)) by.set(m.group, []); by.get(m.group).push(m); });
+      const pad = n => Array(n).fill('');
+      const aoa = [
+        ['ATTENDANCE SHEET'],
+        [`${D(o.from)} to ${D(o.to)} · ${o.categories.join(', ')} · ${all.length} member(s) · ${cols.length} date(s)`],
+        ['P = Present   A = Absent   E = Excused   (blank = no record)'], [],
+        ['#', 'Name', 'Slot', ...cols.map(c => SD(c.date)), 'Present', 'Absent', 'Excused', 'Total', 'Rate %'],
+        [...pad(3), ...cols.map(c => (c.sys ? DOW(c.date) : c.event)), ...pad(5)],
+      ];
+      let n = 0;
+      gOrder.forEach(g => {
+        const ms = by.get(g);
+        if (!ms) return;
+        aoa.push([], ['', g.toUpperCase() + '  (' + ms.length + ')']);
+        ms.forEach(m => { n++; const t = m.p + m.a + m.e; aoa.push([n, m.name, m.group, ...m.cells, m.p, m.a, m.e, t, pct(m.p, t)]); });
+      });
+      aoa.push([]);
+      const cnt = ch => cols.map((_, i) => all.filter(m => m.cells[i] === ch).length);
+      const P = cnt('P'), A = cnt('A'), E = cnt('E');
+      const foot = (l, arr) => aoa.push(['', l, '', ...arr, ...pad(5)]);
+      foot('Present', P); foot('Absent', A); foot('Excused', E);
+      foot('Attendance %', cols.map((_, i) => pct(P[i], P[i] + A[i] + E[i])));
+      const w = [5, 34, 22, ...cols.map(c => (c.sys ? 9 : Math.max(9, Math.min(String(c.event).length + 2, 22)))), 9, 9, 9, 8, 8];
+      XLSX.utils.book_append_sheet(wb, mk(aoa, w), sname('Attendance Sheet'));
+      wb.SheetNames.unshift(wb.SheetNames.pop()); // names first
+    })();
 
     /* ---- Registers: one sheet per slot (Normal Serve) / per category (events) ---- */
     const groups = new Map();
@@ -158,6 +210,7 @@
         ...ex.map(r => [D(r.date), DOW(r.date), r.category, r.event, r.member, r.slot || '', r.reason || '']),
       ], [14, 6, 18, 24, 32, 20, 50]), sname('Excused Details'));
     }
+    wb.Workbook = { Views: [{ activeTab: 0 }] };
     return wb;
   };
 })();

@@ -906,7 +906,7 @@ Pedro Reyes&#9;inactive"></textarea>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="app.js"></script>
 <script src="coy.js"></script>
-<script src="export.js"></script>
+<script src="export.js?v=3"></script>
 <script src="records.js"></script>
 <script src="excused.js"></script>
 <script src="mobile.js"></script>
