@@ -17,6 +17,9 @@ function requireSecretariat() {
     if (!isset($_SESSION['user_id'])) respond(false, 'Your session has expired. Please log in again.');
     if (($_SESSION['role'] ?? '') !== 'secretariat') respond(false, 'You do not have permission to perform this action.');
 }
+function needLogin() {
+    if (!isset($_SESSION['user_id'])) respond(false, 'Your session has expired. Please log in again.');
+}
 function uname($pdo, $id) {
     $s = $pdo->prepare("SELECT full_name FROM users WHERE id = ?"); $s->execute([$id]);
     return (string)($s->fetchColumn() ?: ('User #' . $id));
@@ -241,6 +244,55 @@ switch ($action) {
         } catch (Throwable $e) { respond(false, 'That Gmail is already used by another account.'); }
         logActivity($pdo, 'set_email', uname($pdo, $id), 'Email set to ' . $email);
         respond(true, 'Email updated.');
+    }
+
+    case 'my_account': {
+        needLogin();
+        $s = $pdo->prepare("SELECT username, full_name, email FROM users WHERE id = ?");
+        $s->execute([$_SESSION['user_id']]);
+        respond(true, '', $s->fetch());
+    }
+
+    case 'change_password': {
+        needLogin();
+        $uid = (int)$_SESSION['user_id'];
+        $cur = (string)($input['current'] ?? '');
+        $new = (string)($input['password'] ?? '');
+        if (strlen($new) < 6) respond(false, 'New password must be at least 6 characters long.');
+        if (rlCount($pdo, 'chpw', (string)$uid, 900) >= 5) respond(false, 'Too many attempts. Please wait 15 minutes and try again.');
+        $s = $pdo->prepare("SELECT password FROM users WHERE id = ?");
+        $s->execute([$uid]);
+        $h = $s->fetchColumn();
+        if (!$h || !password_verify($cur, $h)) { rlHit($pdo, 'chpw', (string)$uid); respond(false, 'Your current password is incorrect.'); }
+        $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([password_hash($new, PASSWORD_BCRYPT), $uid]);
+        rlClear($pdo, 'chpw', (string)$uid);
+        logActivity($pdo, 'change_password', uname($pdo, $uid), 'Changed own password');
+        respond(true, 'Password changed.');
+    }
+
+    case 'email_change_request': {
+        needLogin();
+        [$email, $key] = needEmail($input['email'] ?? '');
+        $uid = (int)$_SESSION['user_id'];
+        if (emailTaken($pdo, $key, $uid)) respond(false, 'That Gmail is already used by another account.');
+        issueCode($pdo, $email, $key, 'chemail', json_encode(['uid' => $uid, 'email' => $email]), 'Confirm your new email', 'Use this code to confirm your new email address.');
+        respond(true, 'We sent a 6-digit code to ' . $email . '.', ['email' => $email]);
+    }
+
+    case 'email_change_verify': {
+        needLogin();
+        [$email, $key] = needEmail($input['email'] ?? '');
+        $uid = (int)$_SESSION['user_id'];
+        $r = checkCode($pdo, $key, 'chemail', $input['code'] ?? '');
+        $p = json_decode((string)$r['payload'], true);
+        if (!is_array($p) || (int)($p['uid'] ?? 0) !== $uid) { dropCode($pdo, $r['id']); respond(false, 'This code was not requested from your account.'); }
+        if (emailTaken($pdo, $key, $uid)) { dropCode($pdo, $r['id']); respond(false, 'That Gmail is already used by another account.'); }
+        try {
+            $pdo->prepare("UPDATE users SET email = ?, email_key = ? WHERE id = ?")->execute([$email, $key, $uid]);
+        } catch (Throwable $e) { dropCode($pdo, $r['id']); respond(false, 'That Gmail is already used by another account.'); }
+        dropCode($pdo, $r['id']);
+        logActivity($pdo, 'set_email', uname($pdo, $uid), 'Email changed to ' . $email);
+        respond(true, 'Email updated.', ['email' => $email]);
     }
 
     default:

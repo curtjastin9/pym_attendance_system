@@ -64,7 +64,7 @@ if (!isset($_SESSION['user_id'])) {
     <a href="#" class="nav-item" data-page="youth">
       <i class="fas fa-users"></i><span>Youth Members</span>
     </a>
-    <a href="#" class="nav-item secretariat-only" data-page="records">
+    <a href="#" class="nav-item" data-page="records">
       <i class="fas fa-file-excel"></i><span>Attendance Records</span>
     </a>
     <div class="nav-section leader-only">Ministry</div>
@@ -288,6 +288,7 @@ if (!isset($_SESSION['user_id'])) {
             <option value="present">Present only</option>
             <option value="absent">Absent only (includes excused)</option>
             <option value="excused">Excused only</option>
+            <option value="volunteer">Volunteer only</option>
           </select>
         </div>
       </div>
@@ -899,7 +900,7 @@ Pedro Reyes&#9;inactive"></textarea>
   <button type="button" class="bn-item" data-page="dashboard"><i class="fas fa-th-large"></i><span>Home</span></button>
   <button type="button" class="bn-item" data-page="attendance"><i class="fas fa-clipboard-check"></i><span>Attendance</span></button>
   <button type="button" class="bn-item" data-page="youth"><i class="fas fa-users"></i><span>Youth</span></button>
-  <button type="button" class="bn-item secretariat-only" data-page="records"><i class="fas fa-file-excel"></i><span>Records</span></button>
+  <button type="button" class="bn-item" data-page="records"><i class="fas fa-file-excel"></i><span>Records</span></button>
   <button type="button" class="bn-item bn-more"><i class="fas fa-bars"></i><span>More</span></button>
 </nav>
 <div class="overlay" id="overlay"></div>
@@ -910,5 +911,6 @@ Pedro Reyes&#9;inactive"></textarea>
 <script src="excused.js"></script>
 <script src="mobile.js"></script>
 <script src="activity.js"></script>
+<script src="extras.js"></script>
 </body>
 </html>

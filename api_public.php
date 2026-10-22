@@ -104,17 +104,20 @@ switch ($action) {
             // Normal Serve counts from the first date attendance was ever recorded.
             $have = [];
             foreach ($rows as $r) $have[$r['member_id'] . '|' . $r['category'] . '|' . $r['date'] . '|' . $r['event']] = true;
+            $att = [];
+            try {
+                $q = $pdo->prepare("SELECT member_id, att_date FROM attendance WHERE att_date BETWEEN ? AND ? AND status IN ('present','volunteer')");
+                $q->execute([$from, $to]);
+                foreach ($q->fetchAll() as $t) $att[$t['member_id'] . '|' . $t['att_date']] = true;
+            } catch (Throwable $e) {}
 
             $today = (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
             $memFilter = $mids ? ' AND y.id IN (' . implode(',', $mids) . ')' : '';
             $members = $pdo->query("SELECT y.id, y.full_name, y.slot_id, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id WHERE y.status = 'active'$memFilter")->fetchAll();
 
             if ($system) {
-                $first = $pdo->query("SELECT MIN(att_date) FROM attendance")->fetchColumn();
-                $st = $pdo->prepare("SELECT DISTINCT slot_id, att_date FROM attendance WHERE att_date BETWEEN ? AND ?");
-                $st->execute([$from, $to]);
-                $taken = [];
-                foreach ($st->fetchAll() as $t) $taken[$t['slot_id'] . '|' . $t['att_date']] = true;
+                $first = pymFirstDate($pdo);
+                $taken = pymRecordedSessions($pdo, $from, $to);
                 $slots = $pdo->query("SELECT id, name, slot_time, dow FROM groups_slots")->fetchAll();
 
                 if ($first) {
@@ -129,6 +132,7 @@ switch ($action) {
                             foreach ($members as $m) {
                                 if ((int)$m['slot_id'] !== (int)$sl['id']) continue;
                                 if (isset($have[$m['id'] . '|' . $system['name'] . '|' . $ds . '|' . $sl['name']])) continue;
+                                if (isset($att[$m['id'] . '|' . $ds])) continue; // attended another slot that day
                                 $rows[] = ['member_id' => $m['id'], 'date' => $ds, 'event' => $sl['name'], 'event_time' => $sl['slot_time'],
                                            'category' => $system['name'], 'member' => $m['full_name'], 'slot' => $m['slot'], 'status' => 'absent', 'time_in' => null, 'reason' => null];
                             }

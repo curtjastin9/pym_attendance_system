@@ -106,3 +106,67 @@ function logActivity($pdo, $action, $target = '', $details = '') {
         }
     }
 }
+
+
+/* ---------- Shared helpers ---------- */
+/** null = secretariat, -1 = leader without slot, otherwise slot id */
+function pymLeaderSlot($pdo) {
+    if (($_SESSION['role'] ?? '') === 'secretariat') return null;
+    $s = $pdo->prepare("SELECT slot_id FROM slot_leaders WHERE user_id = ? LIMIT 1");
+    $s->execute([$_SESSION['user_id'] ?? 0]);
+    $r = $s->fetch();
+    if ($r && $r['slot_id']) return (int)$r['slot_id'];
+    $s = $pdo->prepare("SELECT slot_id FROM users WHERE id = ?");
+    $s->execute([$_SESSION['user_id'] ?? 0]);
+    $r = $s->fetch();
+    if ($r && $r['slot_id'] !== null) return (int)$r['slot_id'];
+    return -1;
+}
+/** Secretariat or an account holding a Commission On Youth position. */
+function isCoyOfficer($pdo) {
+    if (!isset($_SESSION['user_id'])) return false;
+    if (($_SESSION['role'] ?? '') === 'secretariat') return true;
+    try {
+        $s = $pdo->prepare("SELECT coy_position_id FROM users WHERE id = ?");
+        $s->execute([$_SESSION['user_id']]);
+        return (bool)$s->fetchColumn();
+    } catch (Throwable $e) { return false; }
+}
+/** Creates attendance_submissions and adds the 'volunteer' status. Once per session. */
+function ensureExtraSchema($pdo) {
+    if (!empty($_SESSION['extra_schema_ok'])) return;
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `attendance_submissions` (
+            `id` int(11) NOT NULL,
+            `slot_id` int(11) NOT NULL,
+            `att_date` date NOT NULL,
+            `submitted_by` int(11) NOT NULL DEFAULT 0,
+            `submitted_at` datetime NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_sub` (`slot_id`,`att_date`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Throwable $e) { error_log('submissions table: ' . $e->getMessage()); }
+    try { require_once __DIR__ . '/attendance_schema.php'; ensureExcusedSchema($pdo); }
+    catch (Throwable $e) { error_log('volunteer enum: ' . $e->getMessage()); }
+    $_SESSION['extra_schema_ok'] = 1;
+}
+/** Sessions that were recorded: any attendance row OR a submission. Returns ["slot|date" => true]. */
+function pymRecordedSessions($pdo, $from, $to) {
+    $out = [];
+    try {
+        $st = $pdo->prepare("SELECT slot_id, att_date FROM attendance WHERE att_date BETWEEN ? AND ? UNION SELECT slot_id, att_date FROM attendance_submissions WHERE att_date BETWEEN ? AND ?");
+        $st->execute([$from, $to, $from, $to]);
+    } catch (Throwable $e) {
+        $st = $pdo->prepare("SELECT DISTINCT slot_id, att_date FROM attendance WHERE att_date BETWEEN ? AND ?");
+        $st->execute([$from, $to]);
+    }
+    foreach ($st->fetchAll() as $t) $out[$t['slot_id'] . '|' . $t['att_date']] = true;
+    return $out;
+}
+function pymFirstDate($pdo) {
+    $a = $pdo->query("SELECT MIN(att_date) FROM attendance")->fetchColumn();
+    try { $b = $pdo->query("SELECT MIN(att_date) FROM attendance_submissions")->fetchColumn(); } catch (Throwable $e) { $b = null; }
+    if (!$a) return $b ?: null;
+    if (!$b) return $a;
+    return min($a, $b);
+}

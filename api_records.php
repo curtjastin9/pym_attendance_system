@@ -20,18 +20,20 @@ function validDate($d) {
     return is_string($d) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) && strtotime($d) !== false;
 }
 
-requireSecretariat();
-if (empty($_SESSION['exc_ok'])) { ensureExcusedSchema($pdo); $_SESSION['exc_ok'] = 1; }
+require_once 'security.php';
+if (!isset($_SESSION['user_id'])) respond(false, 'Your session has expired. Please log in again.');
+ensureExtraSchema($pdo);
+$LS = pymLeaderSlot($pdo); // null = secretariat, otherwise a leader (own slot only)
 
 switch ($action) {
 
     case 'get_record_categories': {
-        $rows = $pdo->query("SELECT id, name, is_system FROM event_categories ORDER BY is_system DESC, name ASC")->fetchAll();
+        $rows = $pdo->query("SELECT id, name, is_system FROM event_categories" . ($LS !== null ? " WHERE is_system = 1" : "") . " ORDER BY is_system DESC, name ASC")->fetchAll();
         respond(true, '', $rows);
     }
 
     case 'get_record_members': {
-        $rows = $pdo->query("SELECT y.id, y.full_name, y.status, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id ORDER BY y.full_name ASC")->fetchAll();
+        $rows = $pdo->query("SELECT y.id, y.full_name, y.status, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id" . ($LS !== null ? " WHERE y.slot_id = " . (int)$LS : "") . " ORDER BY y.full_name ASC")->fetchAll();
         respond(true, '', $rows);
     }
 
@@ -52,6 +54,8 @@ switch ($action) {
         if (!is_array($mids)) $mids = [];
         $mids = array_values(array_unique(array_filter(array_map('intval', $mids), fn($v) => $v > 0)));
         $memSql = $mids ? ' AND a.member_id IN (' . implode(',', $mids) . ')' : '';
+        $slotSql = ($LS !== null) ? ' AND a.slot_id = ' . (int)$LS : '';
+        $slotFilter = ($LS !== null) ? ' AND y.slot_id = ' . (int)$LS : '';
 
         try {
             $cats = $pdo->query("SELECT id, name, is_system FROM event_categories")->fetchAll();
@@ -59,6 +63,7 @@ switch ($action) {
             foreach ($cats as $c) {
                 if (!$ids || in_array((int)$c['id'], $ids, true)) $selected[] = $c;
             }
+            if ($LS !== null) $selected = array_values(array_filter($selected, fn($c) => (int)$c['is_system'] === 1));
             if (!$selected) respond(false, 'Please select at least one category.');
 
             $rows = [];
@@ -76,7 +81,7 @@ switch ($action) {
                     FROM attendance a
                     JOIN youth_members y ON y.id = a.member_id
                     LEFT JOIN groups_slots g ON g.id = a.slot_id
-                    WHERE a.att_date BETWEEN ? AND ?$memSql");
+                    WHERE a.att_date BETWEEN ? AND ?$memSql$slotSql");
                 $stmt->execute([$from, $to]);
                 foreach ($stmt->fetchAll() as $r) {
                     $r['category'] = $system['name'];
@@ -102,17 +107,20 @@ switch ($action) {
             // Normal Serve counts from the first date attendance was ever recorded.
             $have = [];
             foreach ($rows as $r) $have[$r['member_id'] . '|' . $r['category'] . '|' . $r['date'] . '|' . $r['event']] = true;
+            $att = [];
+            try {
+                $q = $pdo->prepare("SELECT member_id, att_date FROM attendance WHERE att_date BETWEEN ? AND ? AND status IN ('present','volunteer')");
+                $q->execute([$from, $to]);
+                foreach ($q->fetchAll() as $t) $att[$t['member_id'] . '|' . $t['att_date']] = true;
+            } catch (Throwable $e) {}
 
             $today = (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
             $memFilter = $mids ? ' AND y.id IN (' . implode(',', $mids) . ')' : '';
-            $members = $pdo->query("SELECT y.id, y.full_name, y.slot_id, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id WHERE y.status = 'active'$memFilter")->fetchAll();
+            $members = $pdo->query("SELECT y.id, y.full_name, y.slot_id, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id WHERE y.status = 'active'$memFilter$slotFilter")->fetchAll();
 
             if ($system) {
-                $first = $pdo->query("SELECT MIN(att_date) FROM attendance")->fetchColumn();
-                $st = $pdo->prepare("SELECT DISTINCT slot_id, att_date FROM attendance WHERE att_date BETWEEN ? AND ?");
-                $st->execute([$from, $to]);
-                $taken = [];
-                foreach ($st->fetchAll() as $t) $taken[$t['slot_id'] . '|' . $t['att_date']] = true;
+                $first = pymFirstDate($pdo);
+                $taken = pymRecordedSessions($pdo, $from, $to);
                 $slots = $pdo->query("SELECT id, name, slot_time, dow FROM groups_slots")->fetchAll();
 
                 if ($first) {
@@ -127,6 +135,7 @@ switch ($action) {
                             foreach ($members as $m) {
                                 if ((int)$m['slot_id'] !== (int)$sl['id']) continue;
                                 if (isset($have[$m['id'] . '|' . $system['name'] . '|' . $ds . '|' . $sl['name']])) continue;
+                                if (isset($att[$m['id'] . '|' . $ds])) continue; // attended another slot that day
                                 $rows[] = ['member_id' => $m['id'], 'date' => $ds, 'event' => $sl['name'], 'event_time' => $sl['slot_time'],
                                            'category' => $system['name'], 'member' => $m['full_name'], 'slot' => $m['slot'], 'status' => 'absent', 'time_in' => null, 'reason' => null];
                             }

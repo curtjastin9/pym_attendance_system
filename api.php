@@ -13,6 +13,7 @@ if (!is_array($input)) $input = [];
 
 require_once 'security.php';
 ensureSecuritySchema($pdo);
+ensureExtraSchema($pdo);
 
 function respond($success, $message = '', $data = null) {
     echo json_encode(['success' => $success, 'message' => $message, 'data' => $data]);
@@ -215,7 +216,7 @@ switch ($action) {
         $presentToday = 0; $absentToday = 0; $services = [];
         foreach ($todaySlots as $slot) {
             $sid = (int)$slot['id'];
-            $p = $att[$sid][$today]['present'] ?? 0;
+            $p = ($att[$sid][$today]['present'] ?? 0) + ($att[$sid][$today]['volunteer'] ?? 0);
             $x = $att[$sid][$today]['excused'] ?? 0;
             $m = $mc[$sid] ?? 0;
             $a = ($nowT >= $slot['slot_time']) ? max(0, $m - $p) : $x;
@@ -251,7 +252,7 @@ switch ($action) {
             $cnt = 0;
             foreach ($att as $sid => $byDate) {
                 if ($leaderSlotId !== null && (int)$sid !== (int)$leaderSlotId) continue;
-                $cnt += $byDate[$d]['present'] ?? 0;
+                $cnt += ($byDate[$d]['present'] ?? 0) + ($byDate[$d]['volunteer'] ?? 0);
             }
             $chart[] = ['date'=>$d,'label'=>date('D', strtotime($d)),'count'=>$cnt];
         }
@@ -268,9 +269,9 @@ switch ($action) {
             $diff = ((int)date('w') - (int)$slot['dow'] + 7) % 7;
             $recent = date('Y-m-d', strtotime("-$diff day"));
             if ($diff === 0 && $nowT < $slot['slot_time']) $recent = date('Y-m-d', strtotime('-7 day'));
-            $present = $att[$sid][$recent]['present'] ?? 0;
+            $present = ($att[$sid][$recent]['present'] ?? 0) + ($att[$sid][$recent]['volunteer'] ?? 0);
             $excused = $att[$sid][$recent]['excused'] ?? 0;
-            $pct = $total > 0 ? round(($present / $total) * 100) : 0;
+            $pct = $total > 0 ? min(100, round(($present / $total) * 100)) : 0;
             $slotSummary[] = ['id'=>$slot['id'],'name'=>$slot['name'],'color'=>$slot['color'],'total'=>$total,'present'=>$present,'pct'=>$pct,'date'=>$recent,'excused'=>$excused,'recorded'=>1];
         }
         $data['slot_summary'] = $slotSummary;
@@ -566,18 +567,18 @@ switch ($action) {
         $leaderSlotId = getLeaderSlotId($pdo);
 
         $pm = [];
-        $pst = $pdo->prepare("SELECT slot_id, att_date, COUNT(*) c FROM attendance WHERE att_date BETWEEN ? AND ? AND status='present' GROUP BY slot_id, att_date");
+        $pst = $pdo->prepare("SELECT slot_id, att_date, COUNT(*) c FROM attendance WHERE att_date BETWEEN ? AND ? AND status IN ('present','volunteer') GROUP BY slot_id, att_date");
         $pst->execute([date('Y-m-d', $firstDay), date('Y-m-t', $firstDay)]);
         foreach ($pst->fetchAll() as $r) $pm[$r['slot_id'] . '|' . $r['att_date']] = (int)$r['c'];
         $tm = [];
         foreach ($pdo->query("SELECT slot_id, COUNT(*) c FROM youth_members WHERE status='active' AND slot_id IS NOT NULL GROUP BY slot_id")->fetchAll() as $r) $tm[(int)$r['slot_id']] = (int)$r['c'];
 
         $catByDate = [];
-        if ($leaderSlotId === null) {
+        if ($leaderSlotId === null || isCoyOfficer($pdo)) {
             try {
                 $from = date('Y-m-d', $firstDay); $to = date('Y-m-t', $firstDay);
                 $st = $pdo->prepare("SELECT e.id, e.title, e.event_date, e.event_time, e.location, c.name AS category,
-                    (SELECT COUNT(*) FROM event_attendance a WHERE a.event_id = e.id AND a.status='present') AS present
+                    (SELECT COUNT(*) FROM event_attendance a WHERE a.event_id = e.id AND a.status IN ('present','volunteer')) AS present
                     FROM events e JOIN event_categories c ON c.id = e.category_id
                     WHERE e.category_id IS NOT NULL AND e.event_date BETWEEN ? AND ? ORDER BY e.event_time ASC");
                 $st->execute([$from, $to]);
@@ -708,6 +709,67 @@ switch ($action) {
         }
 
         respond(true, '', ['events'=>$eventRows,'members'=>$memberRows]);
+    }
+
+    case 'get_alerts': {
+        requireLogin();
+        $leaderSlotId = getLeaderSlotId($pdo);
+        $today = date('Y-m-d');
+        $slots = $pdo->query("SELECT id, name, dow, slot_time FROM groups_slots")->fetchAll();
+        if ($leaderSlotId !== null) $slots = array_values(array_filter($slots, fn($s) => (int)$s['id'] === (int)$leaderSlotId));
+        $mc = [];
+        foreach ($pdo->query("SELECT slot_id, COUNT(*) c FROM youth_members WHERE status='active' AND slot_id IS NOT NULL GROUP BY slot_id")->fetchAll() as $r) $mc[(int)$r['slot_id']] = (int)$r['c'];
+
+        // 1) Sessions that already happened but were never submitted
+        $ns = [];
+        $from = max(CAL_START, date('Y-m-d', strtotime($leaderSlotId !== null ? '-6 day' : '-13 day')));
+        if ($from <= $today) {
+            $sub = pymRecordedSessions($pdo, $from, $today);
+            for ($ts = strtotime($from); $ts <= strtotime($today); $ts += 86400) {
+                $d = date('Y-m-d', $ts); $dow = (int)date('w', $ts);
+                foreach ($slots as $sl) {
+                    if ((int)$sl['dow'] !== $dow || empty($mc[(int)$sl['id']])) continue;
+                    if (strtotime($d . ' ' . $sl['slot_time']) + 7200 > time()) continue;
+                    if (isset($sub[$sl['id'] . '|' . $d])) continue;
+                    $ns[] = ['slot_id' => (int)$sl['id'], 'name' => $sl['name'], 'date' => $d];
+                }
+            }
+            usort($ns, fn($a, $b) => strcmp($b['date'], $a['date']));
+        }
+
+        // 2) Members who missed 3+ recorded services in a row
+        $min = 3; $out = [];
+        $rec = pymRecordedSessions($pdo, CAL_START, $today);
+        $att = []; $exc = [];
+        $q = $pdo->prepare("SELECT member_id, att_date, status FROM attendance WHERE att_date >= ?");
+        $q->execute([CAL_START]);
+        foreach ($q->fetchAll() as $r) {
+            $k = $r['member_id'] . '|' . $r['att_date'];
+            if (in_array($r['status'], ['present', 'volunteer'], true)) $att[$k] = true;
+            elseif ($r['status'] === 'excused') $exc[$k] = true;
+        }
+        $mq = $pdo->prepare("SELECT id, full_name FROM youth_members WHERE status='active' AND slot_id = ? ORDER BY full_name ASC");
+        foreach ($slots as $sl) {
+            $dates = [];
+            foreach ($rec as $k => $_) { [$sid, $d] = explode('|', $k); if ((int)$sid === (int)$sl['id']) $dates[] = $d; }
+            rsort($dates);
+            if (count($dates) < $min) continue;
+            $mq->execute([$sl['id']]);
+            foreach ($mq->fetchAll() as $m) {
+                $streak = 0; $ex = 0;
+                foreach ($dates as $d) {
+                    $k = $m['id'] . '|' . $d;
+                    if (isset($att[$k])) break;
+                    $streak++; if (isset($exc[$k])) $ex++;
+                }
+                if ($streak < $min) continue;
+                $last = null;
+                foreach ($dates as $d) if (isset($att[$m['id'] . '|' . $d])) { $last = $d; break; }
+                $out[] = ['member_id' => (int)$m['id'], 'full_name' => $m['full_name'], 'slot_name' => $sl['name'], 'streak' => $streak, 'excused' => $ex, 'last_attended' => $last];
+            }
+        }
+        usort($out, fn($a, $b) => ($b['streak'] <=> $a['streak']) ?: strcmp($a['full_name'], $b['full_name']));
+        respond(true, '', ['not_submitted' => $ns, 'followup' => $out]);
     }
 
     case 'get_users': {
