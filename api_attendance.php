@@ -105,10 +105,6 @@ switch ($action) {
         $date    = $input['date'] ?? '';
         $records = $input['records'] ?? [];
         checkSlotAccess($pdo, $slot_id, $date);
-        if (leaderSlotId($pdo) !== null) {
-            if ($date < date('Y-m-d', strtotime('-6 day')) || $date > date('Y-m-d'))
-                respond(false, 'Slot leaders can only mark attendance for the last 7 days. Please ask the Secretariat to make this change.');
-        }
         $names = [];
         if (!is_array($records)) $records = [];
 

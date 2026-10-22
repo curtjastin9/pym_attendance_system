@@ -722,7 +722,7 @@ switch ($action) {
 
         // 1) Sessions that already happened but were never submitted
         $ns = [];
-        $from = max(CAL_START, date('Y-m-d', strtotime($leaderSlotId !== null ? '-6 day' : '-13 day')));
+        $from = max(CAL_START, date('Y-m-d', strtotime('-13 day')));
         if ($from <= $today) {
             $sub = pymRecordedSessions($pdo, $from, $today);
             for ($ts = strtotime($from); $ts <= strtotime($today); $ts += 86400) {
