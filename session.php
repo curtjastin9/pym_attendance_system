@@ -205,7 +205,7 @@ if (session_status() === PHP_SESSION_NONE) {
     }
     if ($file === 'index.php' || substr($path, -10) === '/index.php') {
         ob_start(function ($html) {
-            return preg_replace('~</body>~i', '<script src="admin_accounts.js"></script></body>', $html, 1);
+            return preg_replace('~</body>~i', '<script src="admin_accounts.js"></script><script src="slotchange.js"></script></body>', $html, 1);
         });
     }
 })();
