@@ -332,8 +332,11 @@ switch ($action) {
                 $mem = $chk->fetch();
                 if (!$mem || (int)$mem['slot_id'] !== (int)$leaderSlotId) respond(false, 'You can only edit members in your assigned slot.');
             }
+            $os = $pdo->prepare("SELECT slot_id FROM youth_members WHERE id=?"); $os->execute([$id]);
+            $oldSlot = $os->fetchColumn();
             $stmt = $pdo->prepare("UPDATE youth_members SET full_name=?, contact=?, address=?, birthdate=?, slot_id=?, status=? WHERE id=?");
             $stmt->execute([$full_name, $contact, $address, $birthdate, $slot_id, $status, $id]);
+            pymSlotChange($pdo, (int)$id, $oldSlot, $slot_id);
             respond(true, 'Member updated successfully.');
         } else {
             if (!empty($input['skip_duplicates'])) {
@@ -583,8 +586,8 @@ switch ($action) {
         $pst = $pdo->prepare("SELECT slot_id, att_date, COUNT(*) c FROM attendance WHERE att_date BETWEEN ? AND ? AND status='present' GROUP BY slot_id, att_date");
         $pst->execute([date('Y-m-d', $firstDay), date('Y-m-t', $firstDay)]);
         foreach ($pst->fetchAll() as $r) $pm[$r['slot_id'] . '|' . $r['att_date']] = (int)$r['c'];
-        $tm = [];
-        foreach ($pdo->query("SELECT slot_id, COUNT(*) c FROM youth_members WHERE status='active' AND slot_id IS NOT NULL GROUP BY slot_id")->fetchAll() as $r) $tm[(int)$r['slot_id']] = (int)$r['c'];
+        $calHist = pymSlotHistory($pdo);
+        $calMem = $pdo->query("SELECT id, slot_id FROM youth_members WHERE status='active'")->fetchAll();
 
         $catByDate = [];
         if ($leaderSlotId === null || isCoyOfficer($pdo)) {
@@ -619,7 +622,8 @@ switch ($action) {
                 if ($leaderSlotId !== null && (int)$slot['id'] !== (int)$leaderSlotId) continue;
 
                 $present = $pm[$slot['id'] . '|' . $dateStr] ?? 0;
-                $total = $tm[(int)$slot['id']] ?? 0;
+                $total = 0;
+                foreach ($calMem as $cm) if ((int)pymSlotOn($calHist, $cm, $dateStr) === (int)$slot['id']) $total++;
 
                 $slotSummary[] = ['id'=>$slot['id'],'title'=>$slot['name'],'time'=>$slot['slot_time'],'color'=>$slot['color'],'present'=>$present,'total'=>$total];
             }
@@ -761,23 +765,26 @@ switch ($action) {
             if ($r['status'] === 'present') $att[$k] = true;
             elseif ($r['status'] === 'excused') $exc[$k] = true;
         }
-        $mq = $pdo->prepare("SELECT id, full_name FROM youth_members WHERE status='active' AND slot_id = ? ORDER BY full_name ASC");
+        $hist = pymSlotHistory($pdo);
+        $mq = $pdo->prepare("SELECT id, full_name, slot_id FROM youth_members WHERE status='active' ORDER BY full_name ASC");
         foreach ($slots as $sl) {
             $dates = [];
             foreach ($rec as $k => $_) { [$sid, $d] = explode('|', $k); if ((int)$sid === (int)$sl['id']) $dates[] = $d; }
             rsort($dates);
             if (count($dates) < $min) continue;
-            $mq->execute([$sl['id']]);
+            $mq->execute();
             foreach ($mq->fetchAll() as $m) {
                 $streak = 0; $ex = 0;
+                if ((int)pymSlotOn($hist, $m, $dates[0]) !== (int)$sl['id']) continue;
                 foreach ($dates as $d) {
+                    if ((int)pymSlotOn($hist, $m, $d) !== (int)$sl['id']) break;
                     $k = $m['id'] . '|' . $d;
                     if (isset($att[$k])) break;
                     $streak++; if (isset($exc[$k])) $ex++;
                 }
                 if ($streak < $min) continue;
                 $last = null;
-                foreach ($dates as $d) if (isset($att[$m['id'] . '|' . $d])) { $last = $d; break; }
+                foreach ($dates as $d) if (isset($att[$m['id'] . '|' . $d]) && (int)pymSlotOn($hist, $m, $d) === (int)$sl['id']) { $last = $d; break; }
                 $out[] = ['member_id' => (int)$m['id'], 'full_name' => $m['full_name'], 'slot_name' => $sl['name'], 'streak' => $streak, 'excused' => $ex, 'last_attended' => $last];
             }
         }

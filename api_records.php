@@ -33,7 +33,16 @@ switch ($action) {
     }
 
     case 'get_record_members': {
-        $rows = $pdo->query("SELECT y.id, y.full_name, y.status, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id" . ($LS !== null ? " WHERE y.slot_id = " . (int)$LS : "") . " ORDER BY y.full_name ASC")->fetchAll();
+        $base = "SELECT y.id, y.full_name, y.status, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id";
+        if ($LS === null) { $rows = $pdo->query($base . " ORDER BY y.full_name ASC")->fetchAll(); }
+        else {
+            $L = (int)$LS;
+            try {
+                $rows = $pdo->query($base . " WHERE y.slot_id = $L OR y.id IN (SELECT member_id FROM attendance WHERE slot_id = $L) OR y.id IN (SELECT member_id FROM member_slot_history WHERE slot_id = $L) ORDER BY y.full_name ASC")->fetchAll();
+            } catch (Throwable $e) {
+                $rows = $pdo->query($base . " WHERE y.slot_id = $L OR y.id IN (SELECT member_id FROM attendance WHERE slot_id = $L) ORDER BY y.full_name ASC")->fetchAll();
+            }
+        }
         respond(true, '', $rows);
     }
 
@@ -116,10 +125,11 @@ switch ($action) {
 
             $today = (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
             $memFilter = $mids ? ' AND y.id IN (' . implode(',', $mids) . ')' : '';
-            $members = $pdo->query("SELECT y.id, y.full_name, y.slot_id, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id WHERE y.status = 'active'$memFilter$slotFilter")->fetchAll();
+            $members = $pdo->query("SELECT y.id, y.full_name, y.slot_id, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id WHERE y.status = 'active'$memFilter")->fetchAll();
 
             if ($system) {
                 $first = pymFirstDate($pdo);
+                $hist = pymSlotHistory($pdo);
                 $taken = pymRecordedSessions($pdo, $from, $to);
                 $slots = $pdo->query("SELECT id, name, slot_time, dow FROM groups_slots")->fetchAll();
 
@@ -131,13 +141,14 @@ switch ($action) {
                         $dow = (int)$d->format('w');
                         foreach ($slots as $sl) {
                             if ((int)$sl['dow'] !== $dow) continue;
+                            if ($LS !== null && (int)$sl['id'] !== (int)$LS) continue;
                             if ($ds >= $today && !isset($taken[$sl['id'] . '|' . $ds])) continue; // future/today not yet recorded
                             foreach ($members as $m) {
-                                if ((int)$m['slot_id'] !== (int)$sl['id']) continue;
+                                if ((int)pymSlotOn($hist, $m, $ds) !== (int)$sl['id']) continue;
                                 if (isset($have[$m['id'] . '|' . $system['name'] . '|' . $ds . '|' . $sl['name']])) continue;
                                 if (isset($att[$m['id'] . '|' . $ds])) continue; // attended another slot that day
                                 $rows[] = ['member_id' => $m['id'], 'date' => $ds, 'event' => $sl['name'], 'event_time' => $sl['slot_time'],
-                                           'category' => $system['name'], 'member' => $m['full_name'], 'slot' => $m['slot'], 'status' => 'absent', 'time_in' => null, 'reason' => null];
+                                           'category' => $system['name'], 'member' => $m['full_name'], 'slot' => $sl['name'], 'status' => 'absent', 'time_in' => null, 'reason' => null];
                             }
                         }
                     }

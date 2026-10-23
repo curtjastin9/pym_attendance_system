@@ -52,6 +52,7 @@ function checkSlotAccess($pdo, $slot_id, $date) {
     if ((int)$slot['dow'] !== (int)date('w', strtotime($date))) respond(false, 'This slot is not scheduled on the selected date.');
     $mine = leaderSlotId($pdo);
     if ($mine !== null && (int)$mine !== (int)$slot_id) respond(false, 'You do not have access to mark attendance for this slot.');
+    return $slot;
 }
 function eventCounts() { return ['present' => 0, 'excused' => 0, 'absent' => 0]; }
 function countLine($cnt, $n) {
@@ -63,28 +64,42 @@ switch ($action) {
     case 'get_slot_attendance': {
         $slot_id = (int)($input['slot_id'] ?? 0);
         $date    = $input['date'] ?? '';
-        checkSlotAccess($pdo, $slot_id, $date);
-        $stmt = $pdo->prepare("SELECT y.id AS member_id, y.full_name, g.name AS slot_name, a.status, a.time_in, a.reason, 0 AS visitor
-            FROM youth_members y
-            LEFT JOIN groups_slots g ON g.id = y.slot_id
-            LEFT JOIN attendance a ON a.member_id = y.id AND a.slot_id = ? AND a.att_date = ?
-            WHERE y.status = 'active' AND y.slot_id = ? ORDER BY y.full_name ASC");
-        $stmt->execute([$slot_id, $date, $slot_id]);
-        $rows = $stmt->fetchAll();
+        $slot = checkSlotAccess($pdo, $slot_id, $date);
+        $hist = pymSlotHistory($pdo);
 
+        // Existing records of this session
+        $rec = [];
+        $rs = $pdo->prepare("SELECT member_id, status, time_in, reason FROM attendance WHERE slot_id = ? AND att_date = ?");
+        $rs->execute([$slot_id, $date]);
+        foreach ($rs->fetchAll() as $r) $rec[(int)$r['member_id']] = $r;
+
+        // Present in another slot the same day
         $el = [];
         $q = $pdo->prepare("SELECT a.member_id, g.name FROM attendance a JOIN groups_slots g ON g.id = a.slot_id WHERE a.att_date = ? AND a.slot_id <> ? AND a.status = 'present'");
         $q->execute([$date, $slot_id]);
         foreach ($q->fetchAll() as $r) $el[(int)$r['member_id']] = $r['name'];
-        foreach ($rows as &$r) $r['elsewhere'] = $el[(int)$r['member_id']] ?? null;
-        unset($r);
 
-        $v = $pdo->prepare("SELECT y.id AS member_id, y.full_name, g.name AS slot_name, a.status, a.time_in, a.reason, 1 AS visitor
-            FROM attendance a JOIN youth_members y ON y.id = a.member_id
-            LEFT JOIN groups_slots g ON g.id = y.slot_id
-            WHERE a.slot_id = ? AND a.att_date = ? AND (y.slot_id IS NULL OR y.slot_id <> ?) ORDER BY y.full_name ASC");
-        $v->execute([$slot_id, $date, $slot_id]);
-        respond(true, '', array_merge($rows, $v->fetchAll()));
+        $ys = $pdo->query("SELECT y.id, y.full_name, y.slot_id, y.status, g.name AS cur_slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id")->fetchAll();
+        $out = [];
+        foreach ($ys as $m) {
+            $mid = (int)$m['id'];
+            $a = $rec[$mid] ?? null;
+            // Roster = members who belonged to this slot ON THAT DATE (old attendance stays with the old slot)
+            $home = (int)pymSlotOn($hist, $m, $date) === $slot_id;
+            if ($home && ($m['status'] === 'active' || $a)) {
+                $out[] = ['member_id' => $mid, 'full_name' => $m['full_name'], 'slot_name' => $slot['name'],
+                          'status' => $a['status'] ?? null, 'time_in' => $a['time_in'] ?? null, 'reason' => $a['reason'] ?? null,
+                          'visitor' => 0, 'elsewhere' => $el[$mid] ?? null];
+            } elseif ($a) {
+                $out[] = ['member_id' => $mid, 'full_name' => $m['full_name'], 'slot_name' => $m['cur_slot'],
+                          'status' => $a['status'], 'time_in' => $a['time_in'], 'reason' => $a['reason'],
+                          'visitor' => 1, 'elsewhere' => null];
+            }
+        }
+        usort($out, function ($x, $y) {
+            return ($x['visitor'] <=> $y['visitor']) ?: strcasecmp($x['full_name'], $y['full_name']);
+        });
+        respond(true, '', $out);
     }
 
     case 'search_members': {
@@ -105,10 +120,11 @@ switch ($action) {
         $date    = $input['date'] ?? '';
         $records = $input['records'] ?? [];
         checkSlotAccess($pdo, $slot_id, $date);
+        $hist = pymSlotHistory($pdo);
         $names = [];
         if (!is_array($records)) $records = [];
 
-        $chk  = $pdo->prepare("SELECT full_name, slot_id, status FROM youth_members WHERE id = ?");
+        $chk  = $pdo->prepare("SELECT id, full_name, slot_id, status FROM youth_members WHERE id = ?");
         $clean = [];
         $seen = [];
         foreach ($records as $r) {
@@ -117,7 +133,7 @@ switch ($action) {
             $chk->execute([$mid]);
             $m = $chk->fetch();
             if (!$m) continue;
-            $home = (int)$m['slot_id'] === $slot_id;
+            $home = (int)pymSlotOn($hist, $m, $date) === $slot_id;
             if (!$home && (empty($r['visitor']) || $m['status'] !== 'active')) continue;
             $seen[$mid] = true;
             $names[$mid] = $m['full_name'] . ($home ? '' : ' (volunteer)');
@@ -245,7 +261,7 @@ switch ($action) {
         if ($chg) {
             $en = $pdo->prepare("SELECT title, event_date FROM events WHERE id = ?"); $en->execute([$event_id]);
             $e = $en->fetch();
-            logActivity($pdo, 'event_attendance', ($e ? $e['title'] . ' · ' . $e['event_date'] : 'Event #' . $event_id), countLine($cnt, count($chg)) . implode('; ', $chg));
+            logActivity($pdo, 'event_attendance', ($e ? $e['title'] . ' · ' . $e['event_date'] : 'Event #' . $event_id), countLine($cnt, count($clean) ? count($chg) : 0) . implode('; ', $chg));
         }
         respond(true, 'Attendance saved successfully.');
     }

@@ -84,7 +84,7 @@
         const isSys = sys.has(r.category), id = r.member_id != null ? r.member_id : r.member;
         if (!mem.has(id)) mem.set(id, { name: r.member, home: '', ev: '', cells: Array(cols.length).fill(''), p: 0, a: 0, e: 0 });
         const m = mem.get(id);
-        if (isSys && !m.home) m.home = r.slot || '';
+        if (isSys) m.home = r.slot || '';
         if (!isSys && !m.ev) m.ev = r.slot || '';
         m.cells[idx.get(isSys ? 'S|' + r.date : 'C|' + r.date + '|' + r.event)] = MARK[r.status] || 'A';
         if (r.status === 'present') m.p++; else if (r.status === 'excused') m.e++; else m.a++;
