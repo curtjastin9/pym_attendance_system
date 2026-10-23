@@ -168,3 +168,61 @@ function pymFirstDate($pdo) {
     if (!$b) return $a;
     return min($a, $b);
 }
+
+
+/* ---------- Slot history: a member keeps old attendance under the old slot when they move ---------- */
+function pymEnsureSlotHistory($pdo) {
+    if (!empty($_SESSION['slothist_ok'])) return;
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `member_slot_history` (
+            `id` int(11) NOT NULL,
+            `member_id` int(11) NOT NULL,
+            `slot_id` int(11) DEFAULT NULL,
+            `effective_from` date NOT NULL,
+            PRIMARY KEY (`id`),
+            KEY `idx_msh` (`member_id`,`effective_from`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $_SESSION['slothist_ok'] = 1;
+    } catch (Throwable $e) { error_log('slot history table: ' . $e->getMessage()); }
+}
+/** Call when a member's slot changes. Effective from today; earlier dates keep the old slot. */
+function pymSlotChange($pdo, $memberId, $oldSlot, $newSlot) {
+    $oldSlot = ($oldSlot === null || $oldSlot === false || $oldSlot === '') ? null : (int)$oldSlot;
+    $newSlot = ($newSlot === null || $newSlot === false || $newSlot === '') ? null : (int)$newSlot;
+    if ($oldSlot === $newSlot) return;
+    try {
+        pymEnsureSlotHistory($pdo);
+        $memberId = (int)$memberId;
+        $nid = function () use ($pdo) { return (int)$pdo->query("SELECT COALESCE(MAX(id),0) FROM member_slot_history")->fetchColumn() + 1; };
+        $c = $pdo->prepare("SELECT COUNT(*) FROM member_slot_history WHERE member_id = ?");
+        $c->execute([$memberId]);
+        if ((int)$c->fetchColumn() === 0) {
+            $pdo->prepare("INSERT INTO member_slot_history (id, member_id, slot_id, effective_from) VALUES (?,?,?,?)")
+                ->execute([$nid(), $memberId, $oldSlot, '2026-10-01']);
+        }
+        $today = max(date('Y-m-d'), '2026-10-01');
+        $s = $pdo->prepare("SELECT id FROM member_slot_history WHERE member_id = ? AND effective_from = ?");
+        $s->execute([$memberId, $today]);
+        $id = $s->fetchColumn();
+        if ($id) $pdo->prepare("UPDATE member_slot_history SET slot_id = ? WHERE id = ?")->execute([$newSlot, $id]);
+        else $pdo->prepare("INSERT INTO member_slot_history (id, member_id, slot_id, effective_from) VALUES (?,?,?,?)")
+                ->execute([$nid(), $memberId, $newSlot, $today]);
+    } catch (Throwable $e) { error_log('slot change: ' . $e->getMessage()); }
+}
+/** [member_id => [[from, slot_id], ...]] */
+function pymSlotHistory($pdo) {
+    $out = [];
+    try {
+        foreach ($pdo->query("SELECT member_id, slot_id, effective_from FROM member_slot_history ORDER BY member_id, effective_from, id")->fetchAll() as $r)
+            $out[(int)$r['member_id']][] = [$r['effective_from'], $r['slot_id'] === null ? null : (int)$r['slot_id']];
+    } catch (Throwable $e) { try { pymEnsureSlotHistory($pdo); } catch (Throwable $e2) {} }
+    return $out;
+}
+/** The member's slot on a given date (falls back to current slot if no history). */
+function pymSlotOn($hist, $m, $date) {
+    $id = (int)$m['id'];
+    if (!isset($hist[$id])) return $m['slot_id'] === null ? null : (int)$m['slot_id'];
+    $r = null;
+    foreach ($hist[$id] as [$from, $sid]) { if ($from <= $date) $r = $sid; else break; }
+    return $r;
+}
