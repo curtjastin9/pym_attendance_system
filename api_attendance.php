@@ -66,6 +66,7 @@ switch ($action) {
         $date    = $input['date'] ?? '';
         $slot = checkSlotAccess($pdo, $slot_id, $date);
         $hist = pymSlotHistory($pdo);
+        $LSM = pymLeaderSlotMap($pdo);
 
         // Existing records of this session
         $rec = [];
@@ -85,7 +86,7 @@ switch ($action) {
             $mid = (int)$m['id'];
             $a = $rec[$mid] ?? null;
             // Roster = members who belonged to this slot ON THAT DATE (old attendance stays with the old slot)
-            $home = (int)pymSlotOn($hist, $m, $date) === $slot_id;
+            $home = (int)pymSlotOn($hist, $m, $date) === $slot_id || (($LSM[$mid] ?? 0) === $slot_id);
             if ($home && ($m['status'] === 'active' || $a)) {
                 $out[] = ['member_id' => $mid, 'full_name' => $m['full_name'], 'slot_name' => $slot['name'],
                           'status' => $a['status'] ?? null, 'time_in' => $a['time_in'] ?? null, 'reason' => $a['reason'] ?? null,
@@ -121,6 +122,7 @@ switch ($action) {
         $records = $input['records'] ?? [];
         checkSlotAccess($pdo, $slot_id, $date);
         $hist = pymSlotHistory($pdo);
+        $LSM = pymLeaderSlotMap($pdo);
         $names = [];
         if (!is_array($records)) $records = [];
 
@@ -133,7 +135,7 @@ switch ($action) {
             $chk->execute([$mid]);
             $m = $chk->fetch();
             if (!$m) continue;
-            $home = (int)pymSlotOn($hist, $m, $date) === $slot_id;
+            $home = (int)pymSlotOn($hist, $m, $date) === $slot_id || (($LSM[$mid] ?? 0) === $slot_id);
             if (!$home && (empty($r['visitor']) || $m['status'] !== 'active')) continue;
             $seen[$mid] = true;
             $names[$mid] = $m['full_name'] . ($home ? '' : ' (volunteer)');

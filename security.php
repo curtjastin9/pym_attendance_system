@@ -256,3 +256,14 @@ function pymApplyLeaderSlot(&$rows, $labels, $idKey, $slotKey) {
     foreach ($rows as &$r) { $k = (int)($r[$idKey] ?? 0); if (isset($labels[$k])) $r[$slotKey] = $labels[$k]; }
     unset($r);
 }
+
+/** [member_id => slot_id] for youth members whose user account is a slot leader (matched by full name). */
+function pymLeaderSlotMap($pdo) {
+    $out = [];
+    try {
+        foreach ($pdo->query("SELECT y.id, sl.slot_id FROM youth_members y
+            JOIN users u ON LOWER(TRIM(u.full_name)) = LOWER(TRIM(y.full_name))
+            JOIN slot_leaders sl ON sl.user_id = u.id")->fetchAll() as $r) $out[(int)$r['id']] = (int)$r['slot_id'];
+    } catch (Throwable $e) { error_log('leader slot map: ' . $e->getMessage()); }
+    return $out;
+}
