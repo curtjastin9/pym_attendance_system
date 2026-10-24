@@ -39,7 +39,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:26px m
 .nav-login{background:var(--gold);color:var(--ink);font-weight:800;font-size:14px;padding:10px 20px;border-radius:8px;transition:.2s}
 .nav-login:hover{background:#fff;transform:translateY(-1px)}
 
-.hero-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px max(20px,6vw) 120px;max-width:980px;margin:0 auto}
+.hero-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px max(20px,6vw) 190px;max-width:980px;margin:0 auto}
 .hero-logo{width:clamp(130px,18vw,190px);height:auto;margin-bottom:20px;filter:drop-shadow(0 14px 34px rgba(0,0,0,.55))}
 .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(245,184,46,.4);background:rgba(245,184,46,.1);color:var(--gold);font-size:12px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;padding:7px 16px;border-radius:99px;margin-bottom:26px;backdrop-filter:blur(6px)}
 .pill i{font-size:11px}
@@ -58,7 +58,7 @@ h1 em{font-style:normal;background:linear-gradient(120deg,var(--gold),#FFE29A 50
 .note{margin-top:22px;font-size:12.5px;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:8px}
 
 /* curved glow like a stage horizon */
-.curve{position:absolute;left:50%;bottom:-2px;width:240%;height:150px;transform:translateX(-50%);border-radius:50% 50% 0 0/100% 100% 0 0;border-top:3px solid transparent;background:linear-gradient(var(--ink),var(--ink)) padding-box,linear-gradient(90deg,transparent 5%,var(--gold) 30%,#fff 50%,var(--sapphire) 70%,transparent 95%) border-box;box-shadow:0 -22px 70px rgba(37,99,235,.35),0 -6px 40px rgba(245,184,46,.18)}
+.curve{position:absolute;left:50%;bottom:-80px;width:240%;height:150px;transform:translateX(-50%);border-radius:50% 50% 0 0/100% 100% 0 0;border-top:3px solid transparent;background:linear-gradient(var(--ink),var(--ink)) padding-box,linear-gradient(90deg,transparent 5%,var(--gold) 30%,#fff 50%,var(--sapphire) 70%,transparent 95%) border-box;box-shadow:0 -22px 70px rgba(37,99,235,.35),0 -6px 40px rgba(245,184,46,.18)}
 
 /* ---------- Sections ---------- */
 section.features{background:var(--ink);padding:70px max(24px,6vw) 40px}
@@ -75,7 +75,7 @@ section.features{background:var(--ink);padding:70px max(24px,6vw) 40px}
 footer{padding:44px 24px 36px;text-align:center;color:rgba(255,255,255,.45);font-size:12.5px;line-height:1.8}
 footer b{color:var(--gold);font-weight:700}
 
-@media (max-width:760px){.curve{bottom:-70px}.hero-body{padding-bottom:130px}.wall{grid-template-columns:repeat(5,1fr);inset:-40%}.btn{width:100%;justify-content:center}.cta{width:100%;max-width:380px}.hero-body{padding-bottom:90px}}
+@media (max-width:760px){.curve{bottom:-80px}.hero-body{padding-bottom:160px}.wall{grid-template-columns:repeat(5,1fr);inset:-40%}.btn{width:100%;justify-content:center}.cta{width:100%;max-width:380px}.hero-body{padding-bottom:90px}}
 @media (prefers-reduced-motion:reduce){.tile{animation:none}}
 </style>
 </head>
