@@ -293,6 +293,7 @@ switch ($action) {
 
     case 'get_youth': {
         requireLogin();
+        pymSyncUserYouth($pdo);
         $leaderSlotId = getLeaderSlotId($pdo);
         if ($leaderSlotId !== null) {
             $stmt = $pdo->prepare("SELECT y.*, g.name as slot_name, g.color as slot_color FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id WHERE y.slot_id = ? ORDER BY y.full_name ASC");
@@ -357,6 +358,9 @@ switch ($action) {
         ensureTrash($pdo);
         $snap = snapshotYouth($pdo, (int)$id);
         if (!$snap) respond(false, 'Member not found.');
+        $lk = $pdo->prepare("SELECT id FROM users WHERE LOWER(TRIM(full_name)) = ? LIMIT 1");
+        $lk->execute([strtolower(trim($snap['member']['full_name']))]);
+        if ($lk->fetch()) respond(false, 'This member is linked to a user account. Delete the user in Users & Roles instead.');
         try {
             $pdo->beginTransaction();
             trashSave($pdo, 'youth', $snap['member']['full_name'], $snap);

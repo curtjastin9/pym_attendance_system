@@ -226,3 +226,15 @@ function pymSlotOn($hist, $m, $date) {
     foreach ($hist[$id] as [$from, $sid]) { if ($from <= $date) $r = $sid; else break; }
     return $r;
 }
+
+
+/* ---------- Every user account must also exist as a Youth Member (matched by full name) ---------- */
+function pymSyncUserYouth($pdo) {
+    try {
+        $rows = $pdo->query("SELECT DISTINCT TRIM(u.full_name) AS n FROM users u WHERE TRIM(u.full_name) <> '' AND NOT EXISTS (SELECT 1 FROM youth_members y WHERE LOWER(TRIM(y.full_name)) = LOWER(TRIM(u.full_name)))")->fetchAll(PDO::FETCH_COLUMN);
+        if (!$rows) return;
+        $nid = (int)$pdo->query("SELECT COALESCE(MAX(id),0) FROM youth_members")->fetchColumn() + 1;
+        $ins = $pdo->prepare("INSERT INTO youth_members (id, full_name, status) VALUES (?,?,'active')");
+        foreach ($rows as $n) $ins->execute([$nid++, substr($n, 0, 100)]);
+    } catch (Throwable $e) { error_log('sync user youth: ' . $e->getMessage()); }
+}
