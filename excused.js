@@ -16,6 +16,7 @@
   .att-reason:hover{border-color:var(--amber)}
   .status-pill.excused{background:var(--amber-pale);color:var(--amber)}
   .status-dot.excused{background:var(--amber)}
+  .att-group td{background:var(--ink);color:#fff!important;font-size:11px!important;font-weight:800!important;letter-spacing:.8px;text-transform:uppercase;padding:9px 14px!important}
   .att-quick-btn.excused-note{cursor:default;background:var(--amber-pale);color:var(--amber);border-color:#FCD34D}
 
   .rsn-back{position:fixed;inset:0;z-index:10000;background:rgba(8,16,31,.6);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -200,7 +201,15 @@ async function openEventAttendance(eventId) {
   const res = await attApi('get_event_att', { event_id: eventId });
   if (!res.success) { tbody.innerHTML = `<tr><td colspan="5" class="empty-msg">${escapeHtml(res.message)}</td></tr>`; return; }
   if (!res.data.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-msg">No active youth members found.</td></tr>'; return; }
-  tbody.innerHTML = res.data.map(attRowHtml).join('');
+  tbody.innerHTML = attEventRowsHtml(res.data);
+}
+
+/* Servers first, attendees below (only when the event has servers) */
+function attEventRowsHtml(data) {
+  const sv = data.filter(r => Number(r.is_server) === 1), at = data.filter(r => Number(r.is_server) !== 1);
+  if (!sv.length) return at.map(attRowHtml).join('');
+  const h = t => `<tr class="att-group"><td colspan="5">${t}</td></tr>`;
+  return h('Servers (' + sv.length + ')') + sv.map(attRowHtml).join('') + h('Attendees (' + at.length + ')') + at.map(attRowHtml).join('');
 }
 
 /* ---------- Wiring (replace old handlers with new ones) ---------- */

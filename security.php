@@ -267,3 +267,30 @@ function pymLeaderSlotMap($pdo) {
     } catch (Throwable $e) { error_log('leader slot map: ' . $e->getMessage()); }
     return $out;
 }
+
+
+/* ---------- Event servers (events that need servers) ---------- */
+function ensureEventServerSchema($pdo) {
+    if (!empty($_SESSION['evsrv_ok'])) return;
+    try {
+        if (!$pdo->query("SHOW COLUMNS FROM `events` LIKE 'has_servers'")->fetch())
+            $pdo->exec("ALTER TABLE `events` ADD COLUMN `has_servers` TINYINT(1) NOT NULL DEFAULT 0");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `event_servers` (
+            `id` int(11) NOT NULL,
+            `event_id` int(11) NOT NULL,
+            `member_id` int(11) NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_evsrv` (`event_id`,`member_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $_SESSION['evsrv_ok'] = 1;
+    } catch (Throwable $e) { error_log('event servers schema: ' . $e->getMessage()); }
+}
+/** [event_id => [[member_id, full_name], ...]] */
+function pymEventServers($pdo) {
+    $out = [];
+    try {
+        foreach ($pdo->query("SELECT s.event_id, y.id AS member_id, y.full_name FROM event_servers s JOIN youth_members y ON y.id = s.member_id ORDER BY y.full_name ASC")->fetchAll() as $r)
+            $out[(int)$r['event_id']][] = ['member_id' => (int)$r['member_id'], 'full_name' => $r['full_name']];
+    } catch (Throwable $e) { error_log('event servers: ' . $e->getMessage()); }
+    return $out;
+}

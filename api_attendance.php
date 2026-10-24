@@ -41,6 +41,7 @@ function nextId($pdo, $table) {
 
 requireLogin();
 ensureExtraSchema($pdo);
+ensureEventServerSchema($pdo);
 
 function checkSlotAccess($pdo, $slot_id, $date) {
     if (!$slot_id || !$date) respond(false, 'Please select a slot and date.');
@@ -196,13 +197,17 @@ switch ($action) {
         $s = $pdo->prepare("SELECT id FROM events WHERE id = ? AND category_id IS NOT NULL");
         $s->execute([$event_id]);
         if (!$s->fetch()) respond(false, 'Invalid event.');
-        $stmt = $pdo->prepare("SELECT y.id AS member_id, y.full_name, g.name AS slot_name, a.status, a.time_in, a.reason
+        $stmt = $pdo->prepare("SELECT y.id AS member_id, y.full_name, g.name AS slot_name, a.status, a.time_in, a.reason,
+                (CASE WHEN sv.id IS NULL THEN 0 ELSE 1 END) AS is_server
             FROM youth_members y
             LEFT JOIN groups_slots g ON g.id = y.slot_id
             LEFT JOIN event_attendance a ON a.member_id = y.id AND a.event_id = ?
-            WHERE y.status = 'active' ORDER BY y.full_name ASC");
-        $stmt->execute([$event_id]);
-        respond(true, '', $stmt->fetchAll());
+            LEFT JOIN event_servers sv ON sv.member_id = y.id AND sv.event_id = ?
+            WHERE (y.status = 'active' OR sv.id IS NOT NULL) ORDER BY is_server DESC, y.full_name ASC");
+        $stmt->execute([$event_id, $event_id]);
+        $erows = $stmt->fetchAll();
+        pymApplyLeaderSlot($erows, pymLeaderLabels($pdo), 'member_id', 'slot_name');
+        respond(true, '', $erows);
     }
 
     case 'save_event_att': {

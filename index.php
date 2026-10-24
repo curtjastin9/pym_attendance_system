@@ -641,7 +641,7 @@ if (!isset($_SESSION['user_id'])) {
         </form>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Title</th><th>Date</th><th>Time</th><th>Location</th><th>Type</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Title</th><th>Date</th><th>Time</th><th>Location</th><th>Category</th><th>Actions</th></tr></thead>
             <tbody id="adminEventsTableBody"><tr><td colspan="6" class="empty-msg">Loading...</td></tr></tbody>
           </table>
         </div>
@@ -912,5 +912,6 @@ Pedro Reyes&#9;inactive"></textarea>
 <script src="mobile.js"></script>
 <script src="activity.js"></script>
 <script src="extras.js"></script>
+<script src="servers.js"></script>
 </body>
 </html>

@@ -530,7 +530,7 @@ async function loadEvents(isAdmin = false) {
       <td>${formatDate(ev.event_date)}</td>
       <td>${ev.event_time ? formatTime(ev.event_time) : '—'}</td>
       <td>${escapeHtml(ev.location || '—')}</td>
-      <td><span class="event-tag ${escapeHtml(ev.type)}">${escapeHtml(ev.type)}</span></td>
+      <td><span class="event-tag ${ev.category_name ? 'category' : escapeHtml(ev.type)}">${escapeHtml(ev.category_name || ev.type)}</span>${Number(ev.has_servers) === 1 ? ' <span class="cat-badge">Servers</span>' : ''}</td>
       ${(isAdmin || isSecretariat) ? `<td>
         <button class="table-btn edit-btn" data-id="${ev.id}" title="Edit"><i class="fas fa-pen"></i></button>
         <button class="table-btn delete-btn" data-id="${ev.id}" title="Delete"><i class="fas fa-trash"></i></button>

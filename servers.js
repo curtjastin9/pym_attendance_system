@@ -1,0 +1,170 @@
+/* PYM — Events: Type = Event Category, "needs servers" checkbox + typed server names. Loaded last on index.php. */
+(function () {
+  const css = `
+  .srv-box{margin:4px 0 14px}
+  .srv-check{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:700;color:var(--text-primary);cursor:pointer;padding:6px 0}
+  .srv-check input{width:18px;height:18px;accent-color:var(--sapphire)}
+  .srv-panel{border:1.5px dashed var(--border-mid);border-radius:var(--radius-sm);padding:14px;background:var(--surface);margin-top:6px}
+  .srv-note{font-size:12px;color:var(--text-soft);margin-bottom:10px;line-height:1.5}
+  .srv-search{position:relative;max-width:420px}
+  .srv-search i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:12px}
+  .srv-search input{width:100%;padding:10px 12px 10px 34px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;outline:none}
+  .srv-search input:focus{border-color:var(--sapphire-glow);box-shadow:0 0 0 3px rgba(59,130,246,.10)}
+  .srv-list{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;max-height:230px;overflow-y:auto;background:var(--surface);border:1.5px solid var(--border-mid);border-radius:8px;box-shadow:var(--shadow-md);padding:4px}
+  .srv-opt{padding:8px 10px;font-size:13px;border-radius:6px;cursor:pointer}
+  .srv-opt:hover{background:var(--sapphire-pale)}
+  .srv-none{padding:9px 10px;font-size:12px;color:var(--text-faint);font-style:italic}
+  .srv-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .srv-chip{display:inline-flex;align-items:center;gap:6px;background:var(--sapphire-pale);border:1px solid #BFDBFE;color:var(--sapphire);font-size:12px;font-weight:700;padding:4px 6px 4px 11px;border-radius:99px}
+  .srv-chip button{border:none;background:rgba(0,0,0,.08);width:18px;height:18px;border-radius:50%;font-size:11px;line-height:1;color:inherit}
+  .srv-empty{font-size:11.5px;color:var(--text-faint);font-style:italic}`;
+  const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  const $ = id => document.getElementById(id);
+  let YOUTH = null;
+  async function youth() {
+    if (YOUTH) return YOUTH;
+    const r = await coyApi('get_all_youth');
+    YOUTH = r.success ? r.data : [];
+    return YOUTH;
+  }
+
+  async function refreshCats() {
+    const form = $('adminEventForm');
+    const sel = form && form.elements['category_id'];
+    if (!sel) return;
+    const r = await apiCall('get_categories');
+    const cats = r.success ? r.data.filter(c => Number(c.is_system) !== 1) : [];
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— Select category —</option>' + cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    sel.value = cur;
+  }
+
+  function mount(form) {
+    const box = document.createElement('div');
+    box.className = 'srv-box';
+    box.innerHTML = `
+      <label class="srv-check"><input type="checkbox" class="srv-on"/> <span>This event needs servers</span></label>
+      <div class="srv-panel hidden">
+        <p class="srv-note">Type the names of the servers (no limit). Everyone else automatically appears as an attendee in Attendance, below the servers.</p>
+        <div class="srv-search"><i class="fas fa-user-plus"></i><input type="text" class="srv-input" placeholder="Type a name..." autocomplete="off"/><div class="srv-list hidden"></div></div>
+        <div class="srv-chips"></div>
+      </div>`;
+    form.querySelector('.form-actions').before(box);
+    const on = box.querySelector('.srv-on'), panel = box.querySelector('.srv-panel'), inp = box.querySelector('.srv-input'),
+          list = box.querySelector('.srv-list'), chips = box.querySelector('.srv-chips');
+    const sel = new Map();
+
+    const draw = () => {
+      chips.innerHTML = sel.size
+        ? [...sel].map(([id, n]) => `<span class="srv-chip">${escapeHtml(n)}<button type="button" data-rm="${id}" aria-label="Remove">&times;</button></span>`).join('')
+        : '<span class="srv-empty">No servers added yet.</span>';
+    };
+    const toggle = () => panel.classList.toggle('hidden', !on.checked);
+    const show = async () => {
+      const q = inp.value.trim().toLowerCase();
+      const all = await youth();
+      const items = all.filter(y => !sel.has(String(y.id)) && (!q || y.full_name.toLowerCase().includes(q))).slice(0, 40);
+      list.innerHTML = items.length
+        ? items.map(y => `<div class="srv-opt" data-id="${y.id}" data-name="${escapeHtml(y.full_name)}">${escapeHtml(y.full_name)}</div>`).join('')
+        : '<div class="srv-none">No match</div>';
+      list.classList.remove('hidden');
+    };
+    const add = o => { sel.set(String(o.dataset.id), o.dataset.name); inp.value = ''; list.classList.add('hidden'); draw(); inp.focus(); };
+
+    on.addEventListener('change', toggle);
+    inp.addEventListener('input', show);
+    inp.addEventListener('focus', show);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); const o = list.querySelector('.srv-opt'); if (o) add(o); }
+      else if (e.key === 'Escape') list.classList.add('hidden');
+    });
+    list.addEventListener('mousedown', e => { const o = e.target.closest('.srv-opt'); if (o) { e.preventDefault(); add(o); } });
+    chips.addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (b) { sel.delete(b.dataset.rm); draw(); } });
+    document.addEventListener('mousedown', e => { if (!e.target.closest('.srv-search')) list.classList.add('hidden'); });
+
+    const api = {
+      get() { return { has_servers: on.checked ? 1 : 0, server_ids: on.checked ? [...sel.keys()] : [] }; },
+      set(has, servers) {
+        on.checked = !!has; sel.clear();
+        (servers || []).forEach(s => sel.set(String(s.member_id), s.full_name));
+        draw(); toggle();
+      },
+      reset() { on.checked = false; sel.clear(); inp.value = ''; list.classList.add('hidden'); draw(); toggle(); }
+    };
+    form.addEventListener('reset', () => setTimeout(api.reset, 0));
+    draw();
+    return api;
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    const adm = $('adminEventForm'), cev = $('categoryEventForm');
+    if (!adm || typeof apiCall !== 'function') return;
+    const s = await apiCall('check_session');
+    if (!(s.success && s.data.role === 'secretariat')) return;
+
+    /* Type -> Category */
+    const t = adm.elements['type'];
+    if (t) {
+      const fld = t.closest('.form-field');
+      fld.innerHTML = '<label>Category</label><select name="category_id" required><option value="">— Select category —</option></select>';
+    }
+    const admSrv = mount(adm);
+    adm.__srv = admSrv;
+    const catSrv = cev ? mount(cev) : null;
+    refreshCats();
+
+    $('adminShowEventFormBtn').addEventListener('click', refreshCats);
+
+    adm.addEventListener('submit', async e => {
+      e.preventDefault(); e.stopImmediatePropagation();
+      const f = adm.elements;
+      if (!f['category_id'].value) { alert('Please select a category.'); return; }
+      const res = await apiCall('save_category_event', Object.assign({
+        id: f['id'].value, category_id: f['category_id'].value, title: f['title'].value.trim(),
+        event_date: f['event_date'].value, event_time: f['event_time'].value, location: f['location'].value.trim()
+      }, admSrv.get()));
+      alert(res.message);
+      if (res.success) { adm.reset(); adm.classList.add('hidden'); loadEvents(true); }
+    }, true);
+
+    if (cev) {
+      cev.addEventListener('submit', async e => {
+        e.preventDefault(); e.stopImmediatePropagation();
+        const f = cev.elements;
+        const res = await apiCall('save_category_event', Object.assign({
+          id: f['id'].value, category_id: f['category_id'].value, title: f['title'].value.trim(),
+          event_date: f['event_date'].value, event_time: f['event_time'].value, location: f['location'].value.trim()
+        }, catSrv.get()));
+        alert(res.message);
+        if (res.success) { cev.reset(); cev.classList.add('hidden'); loadAdminCategories(); }
+      }, true);
+
+      // Editing an event inside Event Categories: fill the servers part
+      document.addEventListener('click', e => {
+        const b = e.target.closest('.cat-ev-edit');
+        if (!b) return;
+        let found = null;
+        ALL_CATEGORIES.forEach(c => c.events.forEach(ev => { if (String(ev.id) === b.dataset.id) found = ev; }));
+        if (found) catSrv.set(Number(found.has_servers) === 1, found.servers);
+      });
+    }
+  });
+
+  /* Editing from Admin Panel → Manage Events */
+  const _editEvent = editEvent;
+  editEvent = async function (id, isAdmin) {
+    if (!isAdmin) return _editEvent(id, isAdmin);
+    const ev = ALL_EVENTS.find(x => String(x.id) === String(id));
+    const form = $('adminEventForm');
+    if (!ev || !form || !form.elements['category_id']) return;
+    await refreshCats();
+    const f = form.elements;
+    f['id'].value = ev.id; f['title'].value = ev.title;
+    f['category_id'].value = ev.category_id || '';
+    f['event_date'].value = ev.event_date; f['event_time'].value = ev.event_time ? ev.event_time.substring(0, 5) : '';
+    f['location'].value = ev.location || '';
+    if (form.__srv) form.__srv.set(Number(ev.has_servers) === 1, ev.servers);
+    form.classList.remove('hidden'); form.scrollIntoView({ behavior: 'smooth' });
+  };
+})();

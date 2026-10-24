@@ -14,6 +14,7 @@ if (!is_array($input)) $input = [];
 require_once 'security.php';
 ensureSecuritySchema($pdo);
 ensureExtraSchema($pdo);
+ensureEventServerSchema($pdo);
 
 function respond($success, $message = '', $data = null) {
     echo json_encode(['success' => $success, 'message' => $message, 'data' => $data]);
@@ -28,7 +29,7 @@ function purgeYouth($pdo, $ids) {
     $ids = array_values(array_filter(array_map('intval', (array)$ids)));
     if (!$ids) return;
     $ph = implode(',', array_fill(0, count($ids), '?'));
-    foreach (['attendance', 'event_attendance', 'coy_holders', 'coy_committee_members'] as $t) {
+    foreach (['attendance', 'event_attendance', 'event_servers', 'coy_holders', 'coy_committee_members'] as $t) {
         try { $pdo->prepare("DELETE FROM `$t` WHERE member_id IN ($ph)")->execute($ids); } catch (Throwable $e) { error_log("purge $t: " . $e->getMessage()); }
     }
     $pdo->prepare("DELETE FROM youth_members WHERE id IN ($ph)")->execute($ids);
@@ -380,8 +381,11 @@ switch ($action) {
 
     case 'get_events': {
         requireLogin();
-        $stmt = $pdo->query("SELECT * FROM events ORDER BY event_date DESC, event_time DESC");
-        respond(true, '', $stmt->fetchAll());
+        $evs = $pdo->query("SELECT e.*, c.name AS category_name FROM events e LEFT JOIN event_categories c ON c.id = e.category_id ORDER BY e.event_date DESC, e.event_time DESC")->fetchAll();
+        $sv = pymEventServers($pdo);
+        foreach ($evs as &$ev) { $ev['servers'] = $sv[(int)$ev['id']] ?? []; }
+        unset($ev);
+        respond(true, '', $evs);
     }
 
     case 'save_event': {
@@ -410,6 +414,7 @@ switch ($action) {
         $id = $input['id'] ?? 0;
         $en = $pdo->prepare("SELECT title, event_date FROM events WHERE id=?"); $en->execute([$id]); $evr = $en->fetch();
         $pdo->prepare("DELETE FROM event_attendance WHERE event_id=?")->execute([$id]);
+        try { $pdo->prepare("DELETE FROM event_servers WHERE event_id=?")->execute([$id]); } catch (Throwable $e) {}
         $stmt = $pdo->prepare("DELETE FROM events WHERE id=?");
         $stmt->execute([$id]);
         logActivity($pdo, 'delete_event', $evr ? $evr['title'] . ' · ' . $evr['event_date'] : 'Event #' . $id, 'Event and its attendance deleted');
@@ -995,7 +1000,8 @@ switch ($action) {
         $cats = $pdo->query("SELECT * FROM event_categories ORDER BY is_system DESC, name ASC")->fetchAll();
         $evs  = $pdo->query("SELECT * FROM events WHERE category_id IS NOT NULL ORDER BY event_date DESC, event_time DESC")->fetchAll();
         $by = [];
-        foreach ($evs as $e) $by[$e['category_id']][] = $e;
+        $sv = pymEventServers($pdo);
+        foreach ($evs as $e) { $e['servers'] = $sv[(int)$e['id']] ?? []; $by[$e['category_id']][] = $e; }
         foreach ($cats as &$c) { $c['events'] = $by[$c['id']] ?? []; }
         unset($c);
         respond(true, '', $cats);
@@ -1026,6 +1032,7 @@ switch ($action) {
         if (!$c) respond(false, 'Category not found.');
         if ((int)$c['is_system'] === 1) respond(false, 'The Normal Serve category cannot be deleted.');
         $pdo->prepare("DELETE FROM event_attendance WHERE event_id IN (SELECT id FROM events WHERE category_id = ?)")->execute([$id]);
+        try { $pdo->prepare("DELETE FROM event_servers WHERE event_id IN (SELECT id FROM events WHERE category_id = ?)")->execute([$id]); } catch (Throwable $e) {}
         $pdo->prepare("DELETE FROM events WHERE category_id = ?")->execute([$id]);
         $pdo->prepare("DELETE FROM event_categories WHERE id = ?")->execute([$id]);
         logActivity($pdo, 'delete_category', 'Category #' . $id, 'Category, its events and their attendance deleted');
@@ -1045,16 +1052,39 @@ switch ($action) {
         $stmt = $pdo->prepare("SELECT is_system FROM event_categories WHERE id = ?");
         $stmt->execute([$category_id]);
         $c = $stmt->fetch();
-        if (!$c) respond(false, 'Invalid category.');
+        if (!$c) respond(false, 'Please select a category.');
         if ((int)$c['is_system'] === 1) respond(false, 'Normal Serve uses the fixed weekly slots. Events cannot be added to it.');
-        if ($id) {
-            $pdo->prepare("UPDATE events SET title=?, event_date=?, event_time=?, location=?, category_id=? WHERE id=?")
-                ->execute([$title, $event_date, $event_time, $location, $category_id, $id]);
-            respond(true, 'Event updated successfully.');
+        $has  = !empty($input['has_servers']) ? 1 : 0;
+        $sids = $input['server_ids'] ?? [];
+        if (!is_array($sids) || !$has) $sids = [];
+        $sids = array_values(array_unique(array_filter(array_map('intval', $sids), fn($v) => $v > 0)));
+        try {
+            $pdo->beginTransaction();
+            if ($id) {
+                $eid = (int)$id;
+                $pdo->prepare("UPDATE events SET title=?, type='category', event_date=?, event_time=?, location=?, category_id=?, has_servers=? WHERE id=?")
+                    ->execute([$title, $event_date, $event_time, $location, $category_id, $has, $eid]);
+            } else {
+                $eid = nextId($pdo, 'events');
+                $pdo->prepare("INSERT INTO events (id, title, type, event_date, event_time, location, category_id, has_servers) VALUES (?,?,?,?,?,?,?,?)")
+                    ->execute([$eid, $title, 'category', $event_date, $event_time, $location, $category_id, $has]);
+            }
+            $pdo->prepare("DELETE FROM event_servers WHERE event_id = ?")->execute([$eid]);
+            if ($sids) {
+                $ph = implode(',', array_fill(0, count($sids), '?'));
+                $q = $pdo->prepare("SELECT id FROM youth_members WHERE id IN ($ph)");
+                $q->execute($sids);
+                $valid = array_map('intval', $q->fetchAll(PDO::FETCH_COLUMN));
+                $nid = nextId($pdo, 'event_servers');
+                $ins = $pdo->prepare("INSERT INTO event_servers (id, event_id, member_id) VALUES (?,?,?)");
+                foreach ($valid as $m) $ins->execute([$nid++, $eid, $m]);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            respond(false, 'Failed to save event: ' . $e->getMessage());
         }
-        $pdo->prepare("INSERT INTO events (id, title, type, event_date, event_time, location, category_id) VALUES (?,?,?,?,?,?,?)")
-            ->execute([nextId($pdo, 'events'), $title, 'category', $event_date, $event_time, $location, $category_id]);
-        respond(true, 'Event added successfully.');
+        respond(true, $id ? 'Event updated successfully.' : 'Event added successfully.');
     }
 
     case 'get_event_attendance': {
