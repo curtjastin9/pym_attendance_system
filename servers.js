@@ -168,3 +168,65 @@
     form.classList.remove('hidden'); form.scrollIntoView({ behavior: 'smooth' });
   };
 })();
+
+/* ---------- Real-time name search for attendance lists (all roles) ---------- */
+(function () {
+  const css = `
+  .att-search{position:sticky;top:72px;z-index:20;background:var(--surface);padding:8px 0 10px;margin:0 0 4px}
+  .att-search .box{position:relative;max-width:460px}
+  .att-search .box i.fa-search{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:13px}
+  .att-search input{width:100%;padding:11px 38px 11px 36px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;outline:none;background:var(--surface)}
+  .att-search input:focus{border-color:var(--sapphire-glow);box-shadow:0 0 0 3px rgba(59,130,246,.10)}
+  .att-search .clr{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:none;background:none;color:var(--text-soft);border-radius:50%;font-size:14px}
+  .att-search .clr:hover{background:var(--bg)}
+  .att-search .nm{font-size:12px;color:var(--text-faint);font-style:italic;margin-top:6px}`;
+  const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  function setup(tbodyId, closeId) {
+    const tb = document.getElementById(tbodyId);
+    if (!tb) return;
+    const wrap = tb.closest('.table-wrap');
+    if (!wrap) return;
+    const box = document.createElement('div');
+    box.className = 'att-search';
+    box.innerHTML = '<div class="box"><i class="fas fa-search"></i><input type="text" placeholder="Search name..." autocomplete="off" aria-label="Search name"/><button type="button" class="clr hidden" aria-label="Clear"><i class="fas fa-times"></i></button></div><div class="nm hidden">No matching name.</div>';
+    wrap.before(box);
+    const inp = box.querySelector('input'), clr = box.querySelector('.clr'), nm = box.querySelector('.nm');
+
+    const apply = () => {
+      const q = inp.value.trim().toLowerCase();
+      clr.classList.toggle('hidden', !q);
+      let shown = 0, total = 0, grp = null, grpShown = 0;
+      const closeGrp = () => { if (grp) grp.style.display = (!q || grpShown) ? '' : 'none'; };
+      tb.querySelectorAll('tr').forEach(tr => {
+        if (tr.classList.contains('att-group')) { closeGrp(); grp = tr; grpShown = 0; return; }
+        if (!tr.dataset.memberId) return;
+        total++;
+        const ok = !q || String(tr.dataset.name || '').toLowerCase().includes(q);
+        tr.style.display = ok ? '' : 'none';
+        if (ok) { shown++; grpShown++; }
+      });
+      closeGrp();
+      nm.classList.toggle('hidden', !(q && total && !shown));
+    };
+    inp.addEventListener('input', apply);
+    inp.addEventListener('keydown', e => { if (e.key === 'Escape') { inp.value = ''; apply(); } });
+    clr.addEventListener('click', () => { inp.value = ''; apply(); inp.focus(); });
+    new MutationObserver(apply).observe(tb, { childList: true });
+    const c = document.getElementById(closeId);
+    if (c) c.addEventListener('click', () => { inp.value = ''; apply(); });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    setup('attendanceTableBody', 'closeAttPanel');
+    setup('evAttTableBody', 'closeEvAttPanel');
+  });
+
+  // "Mark All" only touches the names currently shown by the search
+  attMarkAll = function (tbody, s) {
+    tbody.querySelectorAll('tr[data-member-id]').forEach(row => {
+      if (row.dataset.status === 'excused' || row.style.display === 'none') return;
+      attSetRow(row, s);
+    });
+  };
+})();
