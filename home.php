@@ -75,7 +75,7 @@ section.features{background:var(--ink);padding:70px max(24px,6vw) 40px}
 footer{padding:44px 24px 36px;text-align:center;color:rgba(255,255,255,.45);font-size:12.5px;line-height:1.8}
 footer b{color:var(--gold);font-weight:700}
 
-@media (max-width:760px){.wall{grid-template-columns:repeat(5,1fr);inset:-40%}.btn{width:100%;justify-content:center}.cta{width:100%;max-width:380px}.hero-body{padding-bottom:90px}}
+@media (max-width:760px){.curve{bottom:-70px}.hero-body{padding-bottom:130px}.wall{grid-template-columns:repeat(5,1fr);inset:-40%}.btn{width:100%;justify-content:center}.cta{width:100%;max-width:380px}.hero-body{padding-bottom:90px}}
 @media (prefers-reduced-motion:reduce){.tile{animation:none}}
 </style>
 </head>
@@ -101,10 +101,8 @@ footer b{color:var(--gold);font-weight:700}
     <p class="sub">A transparent, real-time record of attendance for Normal Serve and special events — open for everyone to view.</p>
 
     <div class="cta">
-      <a href="public.php" class="btn btn-primary"><i class="fas fa-clipboard-list"></i> Attendance Record <i class="fas fa-chevron-right"></i></a>
-      <a href="login.php" class="btn btn-ghost"><i class="fas fa-right-to-bracket"></i> Login</a>
+      <a href="login.php" class="btn btn-primary"><i class="fas fa-right-to-bracket"></i> Login <i class="fas fa-chevron-right"></i></a>
     </div>
-    <p class="note"><i class="fas fa-lock-open"></i> No account needed to view attendance records.</p>
   </div>
   <div class="curve"></div>
 </header>
