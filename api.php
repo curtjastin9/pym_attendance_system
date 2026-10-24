@@ -301,7 +301,11 @@ switch ($action) {
         } else {
             $stmt = $pdo->query("SELECT y.*, g.name as slot_name, g.color as slot_color FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id ORDER BY y.full_name ASC");
         }
-        respond(true, '', $stmt->fetchAll());
+        $yrows = $stmt->fetchAll();
+        $ll = pymLeaderLabels($pdo);
+        foreach ($yrows as &$yr) { if (isset($ll[(int)$yr['id']])) { $yr['slot_name'] = $ll[(int)$yr['id']]; $yr['slot_color'] = '#D97706'; } }
+        unset($yr);
+        respond(true, '', $yrows);
     }
 
     case 'save_youth': {

@@ -32,6 +32,7 @@ switch ($action) {
 
     case 'get_record_members': {
         $rows = $pdo->query("SELECT y.id, y.full_name, y.status, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id WHERE y.status = 'active' ORDER BY y.full_name ASC")->fetchAll();
+        pymApplyLeaderSlot($rows, pymLeaderLabels($pdo), 'id', 'slot');
         respond(true, '', $rows);
     }
 
@@ -117,6 +118,7 @@ switch ($action) {
 
             if ($system) {
                 $first = pymFirstDate($pdo);
+                $hist = pymSlotHistory($pdo);
                 $taken = pymRecordedSessions($pdo, $from, $to);
                 $slots = $pdo->query("SELECT id, name, slot_time, dow FROM groups_slots")->fetchAll();
 
@@ -130,11 +132,11 @@ switch ($action) {
                             if ((int)$sl['dow'] !== $dow) continue;
                             if ($ds >= $today && !isset($taken[$sl['id'] . '|' . $ds])) continue; // future/today not yet recorded
                             foreach ($members as $m) {
-                                if ((int)$m['slot_id'] !== (int)$sl['id']) continue;
+                                if ((int)pymSlotOn($hist, $m, $ds) !== (int)$sl['id']) continue;
                                 if (isset($have[$m['id'] . '|' . $system['name'] . '|' . $ds . '|' . $sl['name']])) continue;
                                 if (isset($att[$m['id'] . '|' . $ds])) continue; // attended another slot that day
                                 $rows[] = ['member_id' => $m['id'], 'date' => $ds, 'event' => $sl['name'], 'event_time' => $sl['slot_time'],
-                                           'category' => $system['name'], 'member' => $m['full_name'], 'slot' => $m['slot'], 'status' => 'absent', 'time_in' => null, 'reason' => null];
+                                           'category' => $system['name'], 'member' => $m['full_name'], 'slot' => $sl['name'], 'status' => 'absent', 'time_in' => null, 'reason' => null];
                             }
                         }
                     }
@@ -158,6 +160,7 @@ switch ($action) {
                 }
             }
 
+            pymApplyLeaderSlot($rows, pymLeaderLabels($pdo), 'member_id', 'slot');
             usort($rows, function ($a, $b) {
                 return [$a['date'], (string)$a['event_time'], $a['category'], $a['event'], strtolower($a['member'])]
                    <=> [$b['date'], (string)$b['event_time'], $b['category'], $b['event'], strtolower($b['member'])];

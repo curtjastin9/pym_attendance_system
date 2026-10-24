@@ -238,3 +238,21 @@ function pymSyncUserYouth($pdo) {
         foreach ($rows as $n) $ins->execute([$nid++, substr($n, 0, 100)]);
     } catch (Throwable $e) { error_log('sync user youth: ' . $e->getMessage()); }
 }
+
+
+/* ---------- Slot leaders show as "Slot Leader · <slot>" in the Group/Slot column ---------- */
+function pymLeaderLabels($pdo) {
+    $out = [];
+    try {
+        foreach ($pdo->query("SELECT y.id, g.name FROM youth_members y
+            JOIN users u ON LOWER(TRIM(u.full_name)) = LOWER(TRIM(y.full_name))
+            JOIN slot_leaders sl ON sl.user_id = u.id
+            JOIN groups_slots g ON g.id = sl.slot_id")->fetchAll() as $r) $out[(int)$r['id']] = 'Slot Leader · ' . $r['name'];
+    } catch (Throwable $e) { error_log('leader labels: ' . $e->getMessage()); }
+    return $out;
+}
+function pymApplyLeaderSlot(&$rows, $labels, $idKey, $slotKey) {
+    if (!$labels) return;
+    foreach ($rows as &$r) { $k = (int)($r[$idKey] ?? 0); if (isset($labels[$k])) $r[$slotKey] = $labels[$k]; }
+    unset($r);
+}

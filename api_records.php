@@ -43,6 +43,7 @@ switch ($action) {
                 $rows = $pdo->query($base . " WHERE y.slot_id = $L OR y.id IN (SELECT member_id FROM attendance WHERE slot_id = $L) ORDER BY y.full_name ASC")->fetchAll();
             }
         }
+        pymApplyLeaderSlot($rows, pymLeaderLabels($pdo), 'id', 'slot');
         respond(true, '', $rows);
     }
 
@@ -172,6 +173,7 @@ switch ($action) {
                 }
             }
 
+            pymApplyLeaderSlot($rows, pymLeaderLabels($pdo), 'member_id', 'slot');
             usort($rows, function ($a, $b) {
                 return [$a['date'], (string)$a['event_time'], $a['category'], $a['event'], strtolower($a['member'])]
                    <=> [$b['date'], (string)$b['event_time'], $b['category'], $b['event'], strtolower($b['member'])];
