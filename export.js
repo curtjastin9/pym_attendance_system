@@ -2,6 +2,9 @@
 (function () {
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const FM = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const RNG = (a, b) => { const [fy, fm, fd] = String(a).split('-').map(Number), [ty, tm, td] = String(b).split('-').map(Number);
+    return fy === ty ? `${FM[fm - 1]} ${fd} to ${FM[tm - 1]} ${td}, ${ty}` : `${FM[fm - 1]} ${fd}, ${fy} to ${FM[tm - 1]} ${td}, ${ty}`; };
   const D = d => { const p = String(d).split('-'); return p.length === 3 ? `${MON[+p[1] - 1]} ${+p[2]}, ${p[0]}` : d; };
   const SD = d => { const p = String(d).split('-'); return p.length === 3 ? `${MON[+p[1] - 1]} ${+p[2]}` : d; };
   const DOW = d => DAYS[new Date(d + 'T00:00:00').getDay()];
@@ -67,7 +70,7 @@
     used.add('summary');
     XLSX.utils.book_append_sheet(wb, mk([
       ['PYM ATTENDANCE REGISTER'], [],
-      ['Date range', `${D(o.from)} to ${D(o.to)}`], ['Categories', o.categories.join(', ')], ['Members', o.memberLabel || 'All members'], ['Scholar category', o.scholarLabel || 'All'],
+      ['Date range', RNG(o.from, o.to)], ['Categories', o.categories.join(', ')], ['Members', o.memberLabel || 'All members'], ['Scholar category', o.scholarLabel || 'All'],
       ['Status filter', o.statusFilter ? cap(o.statusFilter) : 'All'], ['Generated', new Date().toLocaleString('en-US')], [],
       ['Total records', s.total], ['Present', s.present], ['Absent (incl. excused)', s.absent], ['  of which Excused', s.excused],
       ['Attendance rate (%)', s.rate], ['Sessions / events', s.events], ['Members', s.members], [],
@@ -111,7 +114,7 @@
       const pad = n => Array(n).fill('');
       const aoa = [
         ['ATTENDANCE SHEET'],
-        [`${D(o.from)} to ${D(o.to)} · ${o.categories.join(', ')} · ${all.length} member(s) · ${cols.length} date(s)`],
+        [`${RNG(o.from, o.to)} · ${o.categories.join(', ')} · ${all.length} member(s) · ${cols.length} date(s)`],
         ['P = Present   A = Absent   E = Excused   (blank = no record)'], [],
         ['#', 'Name', 'Slot', 'Scholar', ...cols.map(c => SD(c.date)), 'Present', 'Absent', 'Excused', 'Total', 'Rate %'],
         [...pad(4), ...cols.map(c => (c.sys ? DOW(c.date) : c.event)), ...pad(5)],
@@ -160,7 +163,7 @@
       const L = lead.length, pad = n => Array(n).fill('');
       const aoa = [
         [g.title.toUpperCase()],
-        [`${g.category} · ${D(o.from)} to ${D(o.to)} · ${list.length} member(s) · ${cols.length} session(s)`], [],
+        [`${g.category} · ${RNG(o.from, o.to)} · ${list.length} member(s) · ${cols.length} session(s)`], [],
         [...lead, ...cols.map(c => SD(c.date)), 'Present', 'Absent', 'Excused', 'Total', 'Rate %'],
         [...pad(L), ...cols.map(c => (g.sys ? DOW(c.date) : c.event)), ...pad(5)],
         [...pad(L), ...cols.map(c => T(c.time)), ...pad(5)],

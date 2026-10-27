@@ -128,6 +128,47 @@ const recByCategory = (rows) => recGroup(rows, r => r.category, r => ({ category
   .map(c => Object.assign(c, { events: new Set(rows.filter(r => r.category === c.category).map(r => r.date + '|' + r.event)).size }))
   .sort((a, b) => a.category.localeCompare(b.category));
 
+/* ---------- Date range text: "October 1 to October 31, 2026" ---------- */
+const REC_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function recRange(from, to) {
+  const [fy, fm, fd] = String(from).split('-').map(Number), [ty, tm, td] = String(to).split('-').map(Number);
+  return fy === ty ? `${REC_MONTHS[fm - 1]} ${fd} to ${REC_MONTHS[tm - 1]} ${td}, ${ty}`
+                   : `${REC_MONTHS[fm - 1]} ${fd}, ${fy} to ${REC_MONTHS[tm - 1]} ${td}, ${ty}`;
+}
+
+/* ---------- Analytics (Secretariat only) ---------- */
+function recTop(rows) {
+  const m = new Map();
+  rows.forEach(r => {
+    const k = r.member_id != null ? r.member_id : r.member;
+    if (!m.has(k)) m.set(k, { member: r.member, slot: r.slot || '—', scholar: r.scholar, present: 0, total: 0 });
+    const g = m.get(k); g.total++; if (r.status === 'present') g.present++;
+  });
+  return Array.from(m.values()).filter(x => x.present > 0)
+    .sort((a, b) => b.present - a.present || (b.present / b.total) - (a.present / a.total) || a.member.localeCompare(b.member)).slice(0, 10);
+}
+function recRenderAnalytics() {
+  let box = recEl('recAnalytics');
+  const isSec = typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.role === 'secretariat';
+  if (!box) {
+    box = document.createElement('div'); box.id = 'recAnalytics'; box.className = 'card'; box.style.marginTop = '20px';
+    recEl('recResults').after(box);
+  }
+  if (!isSec) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  const sys = new Set(REC.cats.filter(c => Number(c.is_system) === 1).map(c => c.name));
+  const table = (list) => list.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>#</th><th>Member</th><th>Slot</th><th>Scholar</th><th>Present</th><th>Total</th><th>Attendance</th></tr></thead><tbody>` +
+    list.map((m, i) => `<tr><td>${i === 0 ? '<i class="fas fa-trophy" style="color:var(--gold-mid)"></i> ' : ''}${i + 1}</td><td><strong>${escapeHtml(m.member)}</strong></td><td>${escapeHtml(m.slot)}</td><td>${scholarBadge(m.scholar)}</td><td>${m.present}</td><td>${m.total}</td><td><span class="rec-rate ${recRateCls(recPct(m.present, m.total))}">${recPct(m.present, m.total)}%</span></td></tr>`).join('') +
+    `</tbody></table></div>` : '<p class="empty-msg">No attendance in this range.</p>';
+  const range = recRange(REC.meta.from, REC.meta.to);
+  box.innerHTML = `
+    <div class="card-header"><div><h3><i class="fas fa-chart-line" style="color:var(--gold-mid);margin-right:8px"></i>Analytics</h3><p class="card-sub">${escapeHtml(range)} · Admin only</p></div></div>
+    <div class="coy-section-title"><i class="fas fa-award" style="color:var(--gold-mid)"></i> TOP SERVER AWARDEE (Normal Serve)</div>
+    ${table(recTop(REC.rows.filter(r => sys.has(r.category))))}
+    <div class="coy-section-title" style="margin-top:22px"><i class="fas fa-medal" style="color:var(--sapphire)"></i> MOST ATTENDANCE IN GENERAL ACTIVITY (ALL ATTENDANCE)</div>
+    ${table(recTop(REC.rows))}`;
+}
+
 /* ---------- Page lifecycle ---------- */
 window.loadRecordsPage = async function () {
   recEl('recFrom').min = recEl('recTo').min = '2026-10-01';
@@ -223,6 +264,7 @@ async function recGenerate() {
   REC.meta = { from, to, categories: res.data.categories, scholarLabel: REC.sch.size === 3 ? 'All' : ['none', 'shs', 'college'].filter(k => REC.sch.has(k)).map(scholarLabel).join(', '), memberLabel: REC.memSel.size ? REC.members.filter(m => REC.memSel.has(String(m.id))).map(m => m.full_name).join(', ') : 'All members' };
   recEl('recResults').classList.remove('hidden');
   recApplyFilters();
+  recRenderAnalytics();
   recEl('recResults').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -248,7 +290,7 @@ function recRender() {
   recEl('recStatExcused').textContent = s.excused.toLocaleString();
   recEl('recStatRate').textContent = s.rate + '%';
   recEl('recSummaryLine').innerHTML =
-    `<strong>${formatDate(REC.meta.from)}</strong> to <strong>${formatDate(REC.meta.to)}</strong> · ` +
+    `<strong>${escapeHtml(recRange(REC.meta.from, REC.meta.to))}</strong> · ` +
     `${escapeHtml(REC.meta.categories.join(', '))} · ${s.events} event(s) · ${s.members} member(s)`;
   recEl('recDownloadBtn').disabled = !s.total;
 

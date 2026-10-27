@@ -930,8 +930,8 @@ Pedro Reyes&#9;inactive&#9;Non Scholar"></textarea>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="app.js?v=4"></script>
 <script src="coy.js?v=4"></script>
-<script src="export.js?v=4"></script>
-<script src="records.js?v=4"></script>
+<script src="export.js?v=5"></script>
+<script src="records.js?v=5"></script>
 <script src="excused.js"></script>
 <script src="mobile.js"></script>
 <script src="activity.js"></script>

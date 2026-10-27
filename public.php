@@ -177,7 +177,7 @@ footer{text-align:center;color:rgba(255,255,255,.4);font-size:12.5px;padding:10p
 <footer>MQAP – PYM Attendance System · Parish Youth Ministry</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="export.js?v=4"></script>
+<script src="export.js?v=5"></script>
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -187,6 +187,8 @@ const fmtTime=t=>{if(!t)return '—';const [h,m]=String(t).split(':');const H=+h
 const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const pct=(a,b)=>b>0?Math.round(a/b*100):0;
 const cls=v=>v>=80?'hi':v>=50?'mid':'lo';
+const FMN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function rangeTxt(a,b){const [fy,fm,fd]=a.split('-').map(Number),[ty,tm,td]=b.split('-').map(Number);return fy===ty?`${FMN[fm-1]} ${fd} to ${FMN[tm-1]} ${td}, ${ty}`:`${FMN[fm-1]} ${fd}, ${fy} to ${FMN[tm-1]} ${td}, ${ty}`}
 const SCH={none:'Non Scholar',shs:'Senior High School Scholar',college:'College Scholar'};
 const schLabel=k=>SCH[k]||SCH.none;
 const schPill=k=>{k=SCH[k]?k:'none';return `<span class="sch-pill sch-${k}">${SCH[k]}</span>`};
@@ -270,7 +272,7 @@ function render(){
   $('sAbsent').textContent=s.absent.toLocaleString();$('sExcused').textContent=s.excused.toLocaleString();
   $('dl').disabled=!s.total;
   $('sRate').textContent=s.rate+'%';$('bar').style.width=s.rate+'%';
-  $('summary').innerHTML=`<b>${fmtDate(S.meta.from)}</b> to <b>${fmtDate(S.meta.to)}</b> · ${esc(S.meta.cats.join(', '))} · ${s.events} event(s) · ${s.members} member(s)`;
+  $('summary').innerHTML=`<b>${rangeTxt(S.meta.from,S.meta.to)}</b> · ${esc(S.meta.cats.join(', '))} · ${s.events} event(s) · ${s.members} member(s)`;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===S.view));
 
   let head,rows;
