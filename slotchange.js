@@ -208,3 +208,65 @@
     };
   });
 })();
+
+/* ---------- Events: year bar + date status highlight ---------- */
+(function () {
+  const st = document.createElement('style');
+  st.textContent = `.ev-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin:0 0 14px}
+  .ev-years,.ev-leg{display:flex;gap:6px;flex-wrap:wrap}
+  .ev-yr{border:1.5px solid #CBD5E1;background:#fff;border-radius:99px;padding:6px 16px;font-size:12.5px;font-weight:800;cursor:pointer;color:#475569}
+  .ev-yr.on{background:#1D4ED8;border-color:#1D4ED8;color:#fff}
+  .ev-yr small{opacity:.7;margin-left:4px;font-weight:700}
+  .ev-chip{font-size:11.5px;font-weight:800;border-radius:99px;padding:4px 11px}
+  .ev-chip.done,.ev-st-done{background:#D1FAE5;color:#047857}
+  .ev-chip.close,.ev-st-close{background:#FEF3C7;color:#B45309}
+  .ev-chip.far,.ev-st-far{background:#EDE9FE;color:#6D28D9}
+  .ev-st{display:inline-block;font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 8px;margin-top:3px}
+  tr.ev-done td{background:#F0FDF4}tr.ev-done td:first-child{box-shadow:inset 5px 0 0 #10B981}
+  tr.ev-close td{background:#FFFBEB}tr.ev-close td:first-child{box-shadow:inset 5px 0 0 #F59E0B}
+  tr.ev-far td{background:#F5F3FF}tr.ev-far td:first-child{box-shadow:inset 5px 0 0 #7C3AED}`;
+  document.head.appendChild(st);
+  const SEL = {}, DAY = 864e5;
+  function info(d) {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    const n = Math.round((new Date(d + 'T00:00:00') - t) / DAY);
+    if (n < 0) return { k: 'done', t: 'Done' };
+    if (n === 0) return { k: 'close', t: 'Today' };
+    if (n <= 30) return { k: 'close', t: n === 1 ? 'Tomorrow' : 'In ' + n + ' days' };
+    return { k: 'far', t: n < 60 ? 'In ' + n + ' days' : 'In ' + Math.round(n / 30) + ' months' };
+  }
+  function paint(id) {
+    const tb = document.getElementById(id);
+    if (!tb || typeof ALL_EVENTS === 'undefined') return;
+    const rows = Array.from(tb.querySelectorAll('tr'));
+    if (!ALL_EVENTS.length || rows.length !== ALL_EVENTS.length) return;
+    const cy = String(new Date().getFullYear());
+    const ys = new Set([cy]);
+    rows.forEach((r, i) => {
+      const d = String(ALL_EVENTS[i].event_date || '').substring(0, 10), s = info(d);
+      r.dataset.y = d.substring(0, 4); ys.add(d.substring(0, 4));
+      r.classList.remove('ev-done', 'ev-close', 'ev-far'); r.classList.add('ev-' + s.k); r.dataset.k = s.k;
+      const td = r.cells[1]; td.querySelectorAll('.ev-st').forEach(x => x.remove());
+      td.insertAdjacentHTML('beforeend', '<br><span class="ev-st ev-st-' + s.k + '">' + s.t + '</span>');
+    });
+    if (!SEL[id]) SEL[id] = cy;
+    let bar = tb._evBar;
+    if (!bar) {
+      bar = document.createElement('div'); bar.className = 'ev-bar'; tb._evBar = bar;
+      const w = tb.closest('.table-wrap') || tb.closest('table');
+      w.parentNode.insertBefore(bar, w);
+      bar.addEventListener('click', e => { const b = e.target.closest('.ev-yr'); if (b) { SEL[id] = b.dataset.y; apply(); } });
+    }
+    function apply() {
+      const sel = SEL[id], c = { done: 0, close: 0, far: 0 };
+      rows.forEach(r => { const ok = sel === 'all' || r.dataset.y === sel; r.style.display = ok ? '' : 'none'; if (ok) c[r.dataset.k]++; });
+      const yl = Array.from(ys).sort();
+      bar.innerHTML = '<div class="ev-years">' + ['all'].concat(yl).map(y => '<button type="button" class="ev-yr' + (y === sel ? ' on' : '') + '" data-y="' + y + '">' + (y === 'all' ? 'All' : y) +
+        '<small>' + rows.filter(r => y === 'all' || r.dataset.y === y).length + '</small></button>').join('') + '</div>' +
+        '<div class="ev-leg"><span class="ev-chip done">Done ' + c.done + '</span><span class="ev-chip close">Close (≤30 days) ' + c.close + '</span><span class="ev-chip far">Far ' + c.far + '</span></div>';
+    }
+    apply();
+  }
+  const _le = loadEvents;
+  loadEvents = async function (a) { await _le(a); try { paint(a ? 'adminEventsTableBody' : 'eventsTableBody'); } catch (e) {} };
+})();
