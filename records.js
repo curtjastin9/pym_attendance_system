@@ -264,7 +264,6 @@ async function recGenerate() {
   REC.meta = { from, to, categories: res.data.categories, scholarLabel: REC.sch.size === 3 ? 'All' : ['none', 'shs', 'college'].filter(k => REC.sch.has(k)).map(scholarLabel).join(', '), memberLabel: REC.memSel.size ? REC.members.filter(m => REC.memSel.has(String(m.id))).map(m => m.full_name).join(', ') : 'All members' };
   recEl('recResults').classList.remove('hidden');
   recApplyFilters();
-  recRenderAnalytics();
   recEl('recResults').scrollIntoView({ behavior: 'smooth' });
 }
 

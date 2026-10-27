@@ -78,6 +78,9 @@ if (!isset($_SESSION['user_id'])) {
     <a href="#" class="nav-item secretariat-only" data-page="admin">
       <i class="fas fa-shield-alt"></i><span>Admin Panel</span>
     </a>
+    <a href="#" class="nav-item secretariat-only" data-page="analytics">
+      <i class="fas fa-chart-line"></i><span>Analytics</span>
+    </a>
     <a href="#" class="nav-item secretariat-only" data-page="users">
       <i class="fas fa-user-cog"></i><span>Users & Roles</span>
     </a>
@@ -380,6 +383,9 @@ if (!isset($_SESSION['user_id'])) {
     </div>
 
   </div>
+
+  <!-- PAGE: ANALYTICS (secretariat only) -->
+  <div class="page" id="page-analytics"></div>
 
   <!-- PAGE: ATTENDANCE -->
   <div class="page" id="page-attendance">
@@ -931,7 +937,8 @@ Pedro Reyes&#9;inactive&#9;Non Scholar"></textarea>
 <script src="app.js?v=4"></script>
 <script src="coy.js?v=6"></script>
 <script src="export.js?v=5"></script>
-<script src="records.js?v=6"></script>
+<script src="records.js?v=7"></script>
+<script src="analytics.js?v=7"></script>
 <script src="excused.js"></script>
 <script src="mobile.js"></script>
 <script src="activity.js"></script>
