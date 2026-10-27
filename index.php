@@ -78,6 +78,9 @@ if (!isset($_SESSION['user_id'])) {
     <a href="#" class="nav-item secretariat-only" data-page="admin">
       <i class="fas fa-shield-alt"></i><span>Admin Panel</span>
     </a>
+    <a href="#" class="nav-item secretariat-only ae-nav" data-page="adminevents">
+      <i class="fas fa-calendar-check"></i><span>Admin Events</span>
+    </a>
     <a href="#" class="nav-item secretariat-only" data-page="analytics">
       <i class="fas fa-chart-line"></i><span>Analytics</span>
     </a>
@@ -488,7 +491,7 @@ if (!isset($_SESSION['user_id'])) {
 
   </div>
 
-  <!-- PAGE: EVENTS (view only for leaders; Secretariat manages in Admin Panel) -->
+  <!-- PAGE: EVENTS (view only for leaders; Secretariat manages in Admin Events) -->
   <div class="page" id="page-events">
     <div class="card">
       <div class="card-header">
@@ -611,24 +614,14 @@ if (!isset($_SESSION['user_id'])) {
     </div>
   </div>
 
-  <!-- PAGE: ADMIN PANEL (secretariat only) -->
-  <div class="page" id="page-admin">
-    <div class="admin-tabs-wrap">
-      <button class="admin-tab active" data-admin-tab="admin-events">
-        <i class="fas fa-calendar-alt"></i> Manage Events
-      </button>
-      <button class="admin-tab" data-admin-tab="admin-slots">
-        <i class="fas fa-layer-group"></i> Manage Groups / Slots
-      </button>
-      <button class="admin-tab" data-admin-tab="admin-categories">
-        <i class="fas fa-tags"></i> Event Categories
-      </button>
-      <button class="admin-tab" data-admin-tab="admin-insert">
-        <i class="fas fa-file-import"></i> Insert Members
-      </button>
+  <!-- PAGE: ADMIN EVENTS (secretariat only) — Manage Events + Event Categories -->
+  <div class="page" id="page-adminevents">
+    <div class="ae-tabs">
+      <button type="button" class="ae-tab active" data-ae="admin-events"><i class="fas fa-calendar-alt"></i> Manage Events</button>
+      <button type="button" class="ae-tab" data-ae="admin-categories"><i class="fas fa-tags"></i> Event Categories</button>
     </div>
 
-    <!-- ADMIN: EVENTS -->
+    <!-- ADMIN EVENTS: EVENTS -->
     <div class="admin-section active" id="admin-events">
       <div class="card">
         <div class="card-header">
@@ -685,63 +678,7 @@ if (!isset($_SESSION['user_id'])) {
       </div>
     </div>
 
-    <!-- ADMIN: GROUPS/SLOTS -->
-    <div class="admin-section" id="admin-slots">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <h3>Groups / Slots Management</h3>
-            <p class="card-sub">Add or edit time slots, and assign leaders and a color</p>
-          </div>
-          <button class="add-btn" id="adminShowSlotFormBtn"><i class="fas fa-plus"></i> Add Time Slot</button>
-        </div>
-        <form id="adminSlotForm" class="data-form hidden">
-          <input type="hidden" name="id"/>
-          <div class="form-row">
-            <div class="form-field">
-              <label>Slot Name</label>
-              <input type="text" name="name" required placeholder="e.g. Sunday 3:00 PM"/>
-            </div>
-            <div class="form-field">
-              <label>Color</label>
-              <input type="color" name="color" value="#4F8EF7"/>
-            </div>
-          </div>
-        <div class="form-row">
-          <div class="form-field">
-            <label>Day</label>
-            <select name="dow" required>
-              <option value="">— Select day —</option>
-              <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option>
-              <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label>Time</label>
-            <input type="time" name="slot_time" required/>
-          </div>
-        </div>
-          <div class="form-row">
-            <div class="form-field">
-              <label>Slot Leaders <small>(max 5)</small></label>
-              <div class="leader-checklist" id="adminSlotLeaderSelect"></div>
-            </div>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="auth-btn small">Save Slot</button>
-            <button type="button" class="cancel-btn" id="adminCancelSlotFormBtn">Cancel</button>
-          </div>
-        </form>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Slot</th><th>Leader</th><th>Members</th><th>Actions</th></tr></thead>
-            <tbody id="adminSlotsTableBody"><tr><td colspan="4" class="empty-msg">Loading...</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- ADMIN: EVENT CATEGORIES -->
+    <!-- ADMIN EVENTS: EVENT CATEGORIES -->
     <div class="admin-section" id="admin-categories">
       <div class="card">
         <div class="card-header">
@@ -794,6 +731,75 @@ if (!isset($_SESSION['user_id'])) {
           </div>
         </form>
         <div id="categoriesList"><p class="empty-msg">Loading...</p></div>
+      </div>
+    </div>
+  </div>
+  <!-- END ADMIN EVENTS -->
+
+  <!-- PAGE: ADMIN PANEL (secretariat only) -->
+  <div class="page" id="page-admin">
+    <div class="admin-tabs-wrap">
+      <button class="admin-tab active" data-admin-tab="admin-slots">
+        <i class="fas fa-layer-group"></i> Manage Groups / Slots
+      </button>
+      <button class="admin-tab" data-admin-tab="admin-insert">
+        <i class="fas fa-file-import"></i> Insert Members
+      </button>
+    </div>
+
+    <!-- ADMIN: GROUPS/SLOTS -->
+    <div class="admin-section active" id="admin-slots">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3>Groups / Slots Management</h3>
+            <p class="card-sub">Add or edit time slots, and assign leaders and a color</p>
+          </div>
+          <button class="add-btn" id="adminShowSlotFormBtn"><i class="fas fa-plus"></i> Add Time Slot</button>
+        </div>
+        <form id="adminSlotForm" class="data-form hidden">
+          <input type="hidden" name="id"/>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Slot Name</label>
+              <input type="text" name="name" required placeholder="e.g. Sunday 3:00 PM"/>
+            </div>
+            <div class="form-field">
+              <label>Color</label>
+              <input type="color" name="color" value="#4F8EF7"/>
+            </div>
+          </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Day</label>
+            <select name="dow" required>
+              <option value="">— Select day —</option>
+              <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option>
+              <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Time</label>
+            <input type="time" name="slot_time" required/>
+          </div>
+        </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Slot Leaders <small>(max 5)</small></label>
+              <div class="leader-checklist" id="adminSlotLeaderSelect"></div>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="auth-btn small">Save Slot</button>
+            <button type="button" class="cancel-btn" id="adminCancelSlotFormBtn">Cancel</button>
+          </div>
+        </form>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Slot</th><th>Leader</th><th>Members</th><th>Actions</th></tr></thead>
+            <tbody id="adminSlotsTableBody"><tr><td colspan="4" class="empty-msg">Loading...</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -974,5 +980,6 @@ Pedro Reyes&#9;inactive&#9;Non Scholar"></textarea>
 <script src="activity.js"></script>
 <script src="extras.js"></script>
 <script src="servers.js"></script>
+<script src="adminevents.js?v=1"></script>
 </body>
 </html>
