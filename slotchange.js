@@ -281,3 +281,18 @@
   const _le = loadEvents;
   loadEvents = async function (a) { await _le(a); try { paint(a ? 'adminEventsTableBody' : 'eventsTableBody'); } catch (e) {} };
 })();
+
+/* ---------- Events: live refresh (no manual reload) ---------- */
+(function () {
+  const WRITES = /^(save_event|delete_event|save_category_event|delete_category|save_category|restore_|bulk_)/;
+  const active = () => { const p = document.getElementById('page-events'); return p && p.classList.contains('active'); };
+  const refresh = () => { try { if (typeof loadEvents === 'function') loadEvents(false); } catch (e) {} };
+  const _api = apiCall;
+  apiCall = async function (action, payload) {
+    const r = await _api(action, payload);
+    try { if (r && r.success && WRITES.test(String(action))) setTimeout(refresh, 150); } catch (e) {}
+    return r;
+  };
+  setInterval(() => { if (active() && !document.hidden) refresh(); }, 15000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && active()) refresh(); });
+})();
