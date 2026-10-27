@@ -246,6 +246,16 @@ if (!isset($_SESSION['user_id'])) {
             </select>
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Scholar Category</label>
+            <select name="scholar_type">
+              <option value="none">Non Scholar</option>
+              <option value="shs">Senior High School Scholar</option>
+              <option value="college">College Scholar</option>
+            </select>
+          </div>
+        </div>
         <p style="font-size:11px;color:var(--text-light);margin:-6px 0 10px;">Group/Slot will default to <strong>None</strong> and can be assigned later via Admin Panel.</p>
         <div class="form-actions">
           <button type="submit" class="auth-btn small">Save Member</button>
@@ -254,7 +264,7 @@ if (!isset($_SESSION['user_id'])) {
       </form>
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>Name</th><th>Group/Slot</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Group/Slot</th><th>Scholar</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody id="youthTableBody"><tr><td colspan="5" class="empty-msg">Loading...</td></tr></tbody>
         </table>
       </div>
@@ -305,6 +315,12 @@ if (!isset($_SESSION['user_id'])) {
         <small id="recCatCount">—</small>
       </div>
       <div class="rec-chips" id="recCatChips"><span class="coy-empty">Loading categories...</span></div>
+
+      <div class="rec-label">
+        <span>Scholar Category <button type="button" class="rec-link" id="recSchAll">Select all</button><button type="button" class="rec-link" id="recSchClear">Clear</button></span>
+        <small id="recSchCount">All categories</small>
+      </div>
+      <div class="rec-chips" id="recSchChips"></div>
 
       <div class="rec-label">
         <span>Members
@@ -751,7 +767,7 @@ if (!isset($_SESSION['user_id'])) {
       <div class="card-header">
         <div>
           <h3><i class="fas fa-file-import" style="color:var(--gold);margin-right:8px;"></i>Insert Members from Excel</h3>
-          <p class="card-sub">Paste copied cells from Excel — Column 1: Full Name &nbsp;|&nbsp; Column 2: Status (active/inactive, optional)</p>
+          <p class="card-sub">Paste copied cells from Excel — Column 1: Full Name &nbsp;|&nbsp; Status (active/inactive) and Scholar Category are optional</p>
         </div>
       </div>
 
@@ -759,20 +775,28 @@ if (!isset($_SESSION['user_id'])) {
 
       <div class="insert-step">
         <div class="insert-step-label"><span class="insert-step-num">1</span> Paste your Excel data below</div>
-        <p class="insert-hint">Copy cells from Excel (2 columns: <strong>Full Name</strong>, <strong>Status</strong>) and paste. No headers needed. Group/Slot will be set to <em>None</em> by default.</p>
+        <p class="insert-hint">Copy cells from Excel (columns: <strong>Full Name</strong>, then optionally <strong>Status</strong> and <strong>Scholar Category</strong> — Non Scholar, Senior High School Scholar or College Scholar) and paste. No headers needed. Group/Slot will be set to <em>None</em> by default.</p>
+        <div class="form-field" style="max-width:340px;margin-bottom:14px">
+          <label>Default scholar category <small>(used for rows without one)</small></label>
+          <select id="insertScholarDefault">
+            <option value="none">Non Scholar</option>
+            <option value="shs">Senior High School Scholar</option>
+            <option value="college">College Scholar</option>
+          </select>
+        </div>
         <div class="insert-example">
           <span class="insert-example-label">Example:</span>
           <table class="insert-example-table">
-            <tr><td>Juan Dela Cruz</td><td>active</td></tr>
-            <tr><td>Maria Santos</td><td>active</td></tr>
-            <tr><td>Pedro Reyes</td><td>inactive</td></tr>
+            <tr><td>Juan Dela Cruz</td><td>active</td><td>Senior High School Scholar</td></tr>
+            <tr><td>Maria Santos</td><td>active</td><td>College Scholar</td></tr>
+            <tr><td>Pedro Reyes</td><td>inactive</td><td>Non Scholar</td></tr>
           </table>
         </div>
         <textarea id="insertExcelText" class="insert-textarea" placeholder="Paste your Excel data here...
 Example:
-Juan Dela Cruz&#9;active
-Maria Santos&#9;active
-Pedro Reyes&#9;inactive"></textarea>
+Juan Dela Cruz&#9;active&#9;Senior High School Scholar
+Maria Santos&#9;active&#9;College Scholar
+Pedro Reyes&#9;inactive&#9;Non Scholar"></textarea>
         <div class="form-actions" style="margin-top:12px;">
           <button class="auth-btn small" id="insertPreviewBtn"><i class="fas fa-eye"></i> Preview Data</button>
           <button class="cancel-btn" id="insertClearBtn"><i class="fas fa-times"></i> Clear</button>
@@ -784,7 +808,7 @@ Pedro Reyes&#9;inactive"></textarea>
         <div class="insert-count-badge" id="insertCountBadge">0 members ready</div>
         <div class="table-wrap" style="margin-top:12px;">
           <table class="data-table">
-            <thead><tr><th>#</th><th>Full Name</th><th>Status</th><th>Group/Slot</th></tr></thead>
+            <thead><tr><th>#</th><th>Full Name</th><th>Status</th><th>Scholar</th><th>Group/Slot</th></tr></thead>
             <tbody id="insertPreviewBody"></tbody>
           </table>
         </div>
@@ -904,10 +928,10 @@ Pedro Reyes&#9;inactive"></textarea>
 </nav>
 <div class="overlay" id="overlay"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="app.js"></script>
-<script src="coy.js"></script>
-<script src="export.js?v=3"></script>
-<script src="records.js"></script>
+<script src="app.js?v=4"></script>
+<script src="coy.js?v=4"></script>
+<script src="export.js?v=4"></script>
+<script src="records.js?v=4"></script>
 <script src="excused.js"></script>
 <script src="mobile.js"></script>
 <script src="activity.js"></script>

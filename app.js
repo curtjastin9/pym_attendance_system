@@ -45,6 +45,24 @@ function formatTime(timeStr) {
   return `${displayHour}:${m} ${ampm}`;
 }
 
+/* ---------- Scholar categories ---------- */
+const SCHOLAR_LABELS = { none: 'Non Scholar', shs: 'Senior High School Scholar', college: 'College Scholar' };
+function scholarKey(v) {
+  const s = String(v == null ? '' : v).toLowerCase().replace(/[^a-z]/g, '');
+  if (!s) return null;
+  if (s.includes('nonscholar') || s === 'none' || s === 'ns') return 'none';
+  if (s === 'shs' || s.includes('seniorhigh') || s.startsWith('shs')) return 'shs';
+  if (s.includes('college') || s === 'col') return 'college';
+  return null;
+}
+function scholarLabel(k) { return SCHOLAR_LABELS[k] || SCHOLAR_LABELS.none; }
+function scholarBadge(k) { k = SCHOLAR_LABELS[k] ? k : 'none'; return `<span class="sch-pill sch-${k}">${SCHOLAR_LABELS[k]}</span>`; }
+(function () {
+  const st = document.createElement('style');
+  st.textContent = '.sch-pill{display:inline-block;border-radius:99px;padding:3px 10px;font-size:10.5px;font-weight:800;white-space:nowrap;letter-spacing:.2px}.sch-none{background:#F1F5F9;color:#475569}.sch-shs{background:#DBEAFE;color:#1D4ED8}.sch-college{background:#EDE9FE;color:#6D28D9}';
+  document.head.appendChild(st);
+})();
+
 document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('loginForm')) initAuthPage();
   if (document.getElementById('sidebar')) initDashboard();
@@ -443,9 +461,14 @@ function initInsertPage() {
       // Split by tab (Excel default) or multiple spaces
       const cols = line.split(/\t/).map(c => c.trim());
       const full_name = cols[0] || '';
-      const status    = (cols[1] || 'active').toLowerCase();
-      const validStatus = ['active', 'inactive'].includes(status) ? status : 'active';
-      if (full_name) parsedRows.push({ full_name, status: validStatus });
+      const defSel = document.getElementById('insertScholarDefault');
+      let validStatus = 'active', scholar = null;
+      cols.slice(1).forEach(c => {
+        const low = c.toLowerCase();
+        if (low === 'active' || low === 'inactive') validStatus = low;
+        else { const k = scholarKey(c); if (k) scholar = k; }
+      });
+      if (full_name) parsedRows.push({ full_name, status: validStatus, scholar_type: scholar || (defSel ? defSel.value : 'none') });
     });
 
     if (parsedRows.length === 0) { showMsg('No valid rows found. Make sure Column 1 = Full Name.', true); return; }
@@ -455,6 +478,7 @@ function initInsertPage() {
         <td style="color:var(--text-light);font-size:12px;">${i + 1}</td>
         <td><strong>${escapeHtml(r.full_name)}</strong></td>
         <td><span class="status-pill ${r.status}">${r.status}</span></td>
+        <td>${scholarBadge(r.scholar_type)}</td>
         <td style="color:var(--text-light);font-size:11px;">— None —</td>
       </tr>
     `).join('');
@@ -478,7 +502,7 @@ function initInsertPage() {
 
     let successCount = 0, failCount = 0;
     for (const r of parsedRows) {
-      const res = await apiCall('save_youth', { id: '', full_name: r.full_name, slot_id: '', status: r.status });
+      const res = await apiCall('save_youth', { id: '', full_name: r.full_name, slot_id: '', status: r.status, scholar_type: r.scholar_type });
       if (res.success) successCount++; else failCount++;
     }
 

@@ -181,7 +181,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sb = document.createElement('div');
     sb.className = 'youth-search';
     sb.innerHTML = '<i class="fas fa-search"></i><input type="text" id="youthSearch" placeholder="Search youth members..." autocomplete="off"/>';
-    tableWrap.parentNode.insertBefore(sb, tableWrap);
+    const tools = document.createElement('div');
+    tools.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:4px 0 12px';
+    tableWrap.parentNode.insertBefore(tools, tableWrap);
+    sb.style.margin = '0';
+    tools.appendChild(sb);
+    const sf = document.createElement('select');
+    sf.id = 'youthScholarFilter';
+    sf.setAttribute('aria-label', 'Filter by scholar category');
+    sf.style.cssText = 'padding:9px 32px 9px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background-color:var(--surface);outline:none;max-width:100%';
+    sf.innerHTML = '<option value="">All categories</option><option value="none">Non Scholar</option><option value="shs">Senior High School Scholar</option><option value="college">College Scholar</option>';
+    tools.appendChild(sf);
+    sf.addEventListener('change', applyYouthFilter);
     sb.querySelector('input').addEventListener('input', applyYouthFilter);
   }
 
@@ -422,7 +433,7 @@ function initYouthPage() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    let data = { id: form.id.value, full_name: form.full_name.value.trim(), slot_id: '', status: form.status.value };
+    let data = { id: form.id.value, full_name: form.full_name.value.trim(), slot_id: '', status: form.status.value, scholar_type: form.elements['scholar_type'].value };
     if (form.id.value && form.dataset.member) {
       // keep the existing slot/contact data when editing
       data = Object.assign(JSON.parse(form.dataset.member), data, { slot_id: JSON.parse(form.dataset.member).slot_id || '' });
@@ -456,14 +467,15 @@ async function loadYouth() {
   loadCOY();
   const res = await apiCall('get_youth');
   const tbody = document.getElementById('youthTableBody');
-  if (!res.success) { tbody.innerHTML = `<tr><td colspan="4" class="empty-msg">${escapeHtml(res.message)}</td></tr>`; return; }
-  if (res.data.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="empty-msg">No youth members yet.</td></tr>'; return; }
+  if (!res.success) { tbody.innerHTML = `<tr><td colspan="5" class="empty-msg">${escapeHtml(res.message)}</td></tr>`; return; }
+  if (res.data.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="empty-msg">No youth members yet.</td></tr>'; return; }
 
   const sec = isSecretariatUser();
   tbody.innerHTML = res.data.map(m => `
-    <tr>
+    <tr data-scholar="${escapeHtml(m.scholar_type || 'none')}">
       <td>${escapeHtml(m.full_name)}</td>
       <td>${m.slot_name ? `<span class="slot-dot" style="display:inline-block;background:${escapeHtml(m.slot_color)}"></span> ${escapeHtml(m.slot_name)}` : '<span style="color:var(--text-light)">— None —</span>'}</td>
+      <td>${scholarBadge(m.scholar_type)}</td>
       <td><span class="status-pill ${m.status}">${m.status}</span></td>
       <td>${sec
         ? `<button class="table-btn edit-btn" data-id="${m.id}" title="Edit"><i class="fas fa-pen"></i></button>
@@ -486,6 +498,7 @@ function editYouth(id, list) {
   form.id.value = m.id;
   form.full_name.value = m.full_name;
   form.status.value = m.status;
+  form.elements['scholar_type'].value = m.scholar_type || 'none';
   form.dataset.member = JSON.stringify(m);
   form.classList.remove('hidden');
   form.scrollIntoView({ behavior: 'smooth' });
@@ -512,14 +525,16 @@ function applyYouthFilter() {
   const inp = document.getElementById('youthSearch');
   if (!inp) return;
   const q = inp.value.trim().toLowerCase();
+  const sfEl = document.getElementById('youthScholarFilter');
+  const sk = sfEl ? sfEl.value : '';
   const tbody = document.getElementById('youthTableBody');
   tbody.querySelectorAll('.no-match-row').forEach(r => r.remove());
   const rows = Array.from(tbody.querySelectorAll('tr')).filter(r => r.querySelector('.edit-btn, .delete-btn'));
   let shown = 0;
   rows.forEach(r => {
-    const ok = !q || r.textContent.toLowerCase().includes(q);
+    const ok = (!q || r.textContent.toLowerCase().includes(q)) && (!sk || r.dataset.scholar === sk);
     r.style.display = ok ? '' : 'none';
     if (ok) shown++;
   });
-  if (rows.length && !shown) tbody.insertAdjacentHTML('beforeend', '<tr class="no-match-row"><td colspan="4" class="empty-msg">No matching members.</td></tr>');
+  if (rows.length && !shown) tbody.insertAdjacentHTML('beforeend', '<tr class="no-match-row"><td colspan="5" class="empty-msg">No matching members.</td></tr>');
 }

@@ -73,7 +73,7 @@
   document.head.appendChild(el);
 })();
 
-const REC = { cats: [], selected: new Set(), rows: [], filtered: [], view: 'records', page: 1, per: 50, meta: null, catsLoaded: false, members: [], memSel: new Set(), memLoaded: false };
+const REC = { sch: new Set(['none', 'shs', 'college']), cats: [], selected: new Set(), rows: [], filtered: [], view: 'records', page: 1, per: 50, meta: null, catsLoaded: false, members: [], memSel: new Set(), memLoaded: false };
 
 async function recApi(action, payload = null) {
   try {
@@ -120,7 +120,7 @@ function recGroup(rows, keyFn, baseFn) {
   return Array.from(map.values()).map(g => Object.assign(g, { rate: recPct(g.present, g.total) }));
 }
 
-const recByMember = (rows) => recGroup(rows, r => r.member, r => ({ member: r.member, slot: r.slot || '—' }))
+const recByMember = (rows) => recGroup(rows, r => r.member, r => ({ member: r.member, slot: r.slot || '—', scholar: r.scholar }))
   .sort((a, b) => a.member.localeCompare(b.member));
 const recByEvent = (rows) => recGroup(rows, r => r.date + '|' + r.category + '|' + r.event,
   r => ({ date: r.date, category: r.category, event: r.event, time: r.event_time }));
@@ -133,6 +133,7 @@ window.loadRecordsPage = async function () {
   recEl('recFrom').min = recEl('recTo').min = '2026-10-01';
   if (!recEl('recFrom').value || !recEl('recTo').value) recSetRange('month');
   if (!REC.catsLoaded) await loadRecCats();
+  renderRecSch();
   if (!REC.memLoaded) await loadRecMembers();
 };
 
@@ -171,6 +172,14 @@ function renderRecChips() {
   recEl('recCatCount').textContent = `${REC.selected.size} of ${REC.cats.length} selected`;
 }
 
+function renderRecSch() {
+  const box = recEl('recSchChips');
+  if (!box) return;
+  box.innerHTML = ['none', 'shs', 'college'].map(k => `
+    <button type="button" class="rec-chip ${REC.sch.has(k) ? 'active' : ''}" data-k="${k}"><i class="fas fa-check"></i>${escapeHtml(scholarLabel(k))}</button>`).join('');
+  recEl('recSchCount').textContent = REC.sch.size === 3 ? 'All categories' : `${REC.sch.size} of 3 selected`;
+}
+
 /* ---------- Member picker ---------- */
 async function loadRecMembers() {
   const res = await recApi('get_record_members');
@@ -199,18 +208,19 @@ async function recGenerate() {
   if (!from || !to) { alert('Please choose a start and end date.'); return; }
   if (from > to) { alert('The start date must be before the end date.'); return; }
   if (!REC.selected.size) { alert('Select at least one category.'); return; }
+  if (!REC.sch.size) { alert('Select at least one scholar category.'); return; }
 
   const btn = recEl('recGenerateBtn');
   const orig = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-  const res = await recApi('get_records', { from, to, category_ids: Array.from(REC.selected), member_ids: Array.from(REC.memSel) });
+  const res = await recApi('get_records', { from, to, category_ids: Array.from(REC.selected), member_ids: Array.from(REC.memSel), scholar_types: Array.from(REC.sch) });
   btn.disabled = false;
   btn.innerHTML = orig;
 
   if (!res.success) { alert(res.message); return; }
   REC.rows = res.data.rows;
-  REC.meta = { from, to, categories: res.data.categories, memberLabel: REC.memSel.size ? REC.members.filter(m => REC.memSel.has(String(m.id))).map(m => m.full_name).join(', ') : 'All members' };
+  REC.meta = { from, to, categories: res.data.categories, scholarLabel: REC.sch.size === 3 ? 'All' : ['none', 'shs', 'college'].filter(k => REC.sch.has(k)).map(scholarLabel).join(', '), memberLabel: REC.memSel.size ? REC.members.filter(m => REC.memSel.has(String(m.id))).map(m => m.full_name).join(', ') : 'All members' };
   recEl('recResults').classList.remove('hidden');
   recApplyFilters();
   recEl('recResults').scrollIntoView({ behavior: 'smooth' });
@@ -222,7 +232,7 @@ function recApplyFilters() {
   REC.filtered = REC.rows.filter(r => {
     if (status === 'absent' && r.status === 'present') return false;
     if (status && status !== 'absent' && r.status !== status) return false;
-    if (q && !(`${r.member} ${r.event} ${r.category} ${r.slot || ''} ${r.reason || ''}`).toLowerCase().includes(q)) return false;
+    if (q && !(`${r.member} ${r.event} ${r.category} ${r.slot || ''} ${r.reason || ''} ${scholarLabel(r.scholar)}`).toLowerCase().includes(q)) return false;
     return true;
   });
   REC.page = 1;
@@ -246,9 +256,9 @@ function recRender() {
 
   let head, rows;
   if (REC.view === 'members') {
-    head = ['Member', 'Slot', 'Present', 'Absent (incl. Excused)', 'of which Excused', 'Total', 'Attendance'];
+    head = ['Member', 'Slot', 'Scholar', 'Present', 'Absent (incl. Excused)', 'of which Excused', 'Total', 'Attendance'];
     rows = recByMember(REC.filtered).map(m => [
-      escapeHtml(m.member), escapeHtml(m.slot), m.present, m.absent, m.excused, m.total,
+      escapeHtml(m.member), escapeHtml(m.slot), scholarBadge(m.scholar), m.present, m.absent, m.excused, m.total,
       `<span class="rec-rate ${recRateCls(m.rate)}">${m.rate}%</span>`]);
   } else if (REC.view === 'events') {
     head = ['Date', 'Category', 'Event', 'Time', 'Present', 'Absent (incl. Excused)', 'of which Excused', 'Total', 'Attendance'];
@@ -256,9 +266,9 @@ function recRender() {
       formatDate(e.date), escapeHtml(e.category), escapeHtml(e.event), recTime(e.time), e.present, e.absent, e.excused, e.total,
       `<span class="rec-rate ${recRateCls(e.rate)}">${e.rate}%</span>`]);
   } else {
-    head = ['Date', 'Category', 'Event', 'Member', 'Slot', 'Status', 'Time In', 'Reason'];
+    head = ['Date', 'Category', 'Event', 'Member', 'Slot', 'Scholar', 'Status', 'Time In', 'Reason'];
     rows = REC.filtered.map(r => [
-      formatDate(r.date), escapeHtml(r.category), escapeHtml(r.event), escapeHtml(r.member), escapeHtml(r.slot || '—'),
+      formatDate(r.date), escapeHtml(r.category), escapeHtml(r.event), escapeHtml(r.member), escapeHtml(r.slot || '—'), scholarBadge(r.scholar),
       `<span class="status-pill ${r.status === 'present' ? 'active' : r.status === 'excused' ? 'excused' : 'inactive'}">${r.status}</span>`, recTime(r.time_in), escapeHtml(r.reason || '—')]);
   }
 
@@ -299,7 +309,7 @@ function recExport() {
   if (typeof XLSX === 'undefined' || typeof pymBuildWorkbook === 'undefined') { alert('The Excel library could not be loaded. Check your internet connection and refresh the page.'); return; }
   const wb = pymBuildWorkbook({
     rows: REC.filtered, from: REC.meta.from, to: REC.meta.to, categories: REC.meta.categories, cats: REC.cats,
-    memberLabel: REC.meta.memberLabel, statusFilter: recEl('recStatus').value, includeReason: true
+    memberLabel: REC.meta.memberLabel, scholarLabel: REC.meta.scholarLabel, statusFilter: recEl('recStatus').value, includeReason: true
   });
   XLSX.writeFile(wb, `PYM_Attendance_${REC.meta.from}_to_${REC.meta.to}.xlsx`);
 }
@@ -326,6 +336,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   recEl('recSelectAll').addEventListener('click', () => { REC.selected = new Set(REC.cats.map(c => String(c.id))); renderRecChips(); });
   recEl('recClearAll').addEventListener('click', () => { REC.selected = new Set(); renderRecChips(); });
+  recEl('recSchChips').addEventListener('click', (e) => {
+    const c = e.target.closest('.rec-chip');
+    if (!c) return;
+    const k = c.dataset.k;
+    if (REC.sch.has(k)) REC.sch.delete(k); else REC.sch.add(k);
+    renderRecSch();
+  });
+  recEl('recSchAll').addEventListener('click', () => { REC.sch = new Set(['none', 'shs', 'college']); renderRecSch(); });
+  recEl('recSchClear').addEventListener('click', () => { REC.sch = new Set(); renderRecSch(); });
   page.querySelectorAll('.rec-quick button').forEach(b => b.addEventListener('click', () => recSetRange(b.dataset.range)));
   recEl('recMemSearch').addEventListener('input', renderRecMembers);
   recEl('recMemList').addEventListener('change', (e) => {

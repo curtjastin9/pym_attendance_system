@@ -133,7 +133,17 @@ function isCoyOfficer($pdo) {
     } catch (Throwable $e) { return false; }
 }
 /** Creates attendance_submissions. Once per session. */
+/** Adds youth_members.scholar_type: none (Non Scholar, default) | shs (Senior High School Scholar) | college (College Scholar). */
+function ensureScholarSchema($pdo) {
+    if (!empty($_SESSION['scholar_ok'])) return;
+    try {
+        if (!$pdo->query("SHOW COLUMNS FROM `youth_members` LIKE 'scholar_type'")->fetch())
+            $pdo->exec("ALTER TABLE `youth_members` ADD COLUMN `scholar_type` VARCHAR(10) NOT NULL DEFAULT 'none'");
+        $_SESSION['scholar_ok'] = 1;
+    } catch (Throwable $e) { error_log('scholar schema: ' . $e->getMessage()); }
+}
 function ensureExtraSchema($pdo) {
+    ensureScholarSchema($pdo);
     if (!empty($_SESSION['extra_schema_ok'])) return;
     try {
         $pdo->exec("CREATE TABLE IF NOT EXISTS `attendance_submissions` (

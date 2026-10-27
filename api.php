@@ -318,6 +318,8 @@ switch ($action) {
         $birthdate = $input['birthdate'] ?? null;
         $slot_id   = $input['slot_id'] ?? null;
         $status    = $input['status'] ?? 'active';
+        $scholar   = $input['scholar_type'] ?? null;
+        if (!in_array($scholar, ['none', 'shs', 'college'], true)) $scholar = null;
 
         if ($full_name === '') respond(false, 'Full name is required.');
         if ($birthdate === '') $birthdate = null;
@@ -342,6 +344,7 @@ switch ($action) {
             $oldSlot = $os->fetchColumn();
             $stmt = $pdo->prepare("UPDATE youth_members SET full_name=?, contact=?, address=?, birthdate=?, slot_id=?, status=? WHERE id=?");
             $stmt->execute([$full_name, $contact, $address, $birthdate, $slot_id, $status, $id]);
+            if ($scholar !== null && $leaderSlotId === null) $pdo->prepare("UPDATE youth_members SET scholar_type=? WHERE id=?")->execute([$scholar, $id]);
             pymSlotChange($pdo, (int)$id, $oldSlot, $slot_id);
             respond(true, 'Member updated successfully.');
         } else {
@@ -350,8 +353,8 @@ switch ($action) {
                 $d->execute([$full_name]);
                 if ($d->fetch()) respond(false, 'duplicate');
             }
-            $stmt = $pdo->prepare("INSERT INTO youth_members (id, full_name, contact, address, birthdate, slot_id, status) VALUES (?,?,?,?,?,?,?)");
-            $stmt->execute([nextId($pdo, 'youth_members'), $full_name, $contact, $address, $birthdate, $slot_id, $status]);
+            $stmt = $pdo->prepare("INSERT INTO youth_members (id, full_name, contact, address, birthdate, slot_id, status, scholar_type) VALUES (?,?,?,?,?,?,?,?)");
+            $stmt->execute([nextId($pdo, 'youth_members'), $full_name, $contact, $address, $birthdate, $slot_id, $status, $scholar ?? 'none']);
             respond(true, 'Member added successfully.');
         }
     }

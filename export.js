@@ -9,6 +9,9 @@
   const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
   const MARK = { present: 'P', absent: 'A', excused: 'E' };
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const SCH = { none: 'Non Scholar', shs: 'Senior High School Scholar', college: 'College Scholar' };
+  const sch = v => SCH[v] || SCH.none;
+  const MR = { P: 3, E: 2, A: 1 }; // when a member has 2 records on one date, Present > Excused > Absent
   const used = new Set();
 
   function sname(n) {
@@ -57,16 +60,22 @@
     const byCat = group(rows, r => r.category, r => ({ category: r.category }))
       .map(c => Object.assign(c, { events: new Set(rows.filter(r => r.category === c.category).map(r => r.date + '|' + r.event)).size }))
       .sort((a, b) => a.category.localeCompare(b.category));
+    const bySch = ['none', 'shs', 'college'].map(k => {
+      const g = stats(rows.filter(r => (r.scholar || 'none') === k));
+      return [SCH[k], g.members, g.present, g.absent, g.excused, g.total, g.rate];
+    }).filter(r => r[5] > 0);
     used.add('summary');
     XLSX.utils.book_append_sheet(wb, mk([
       ['PYM ATTENDANCE REGISTER'], [],
-      ['Date range', `${D(o.from)} to ${D(o.to)}`], ['Categories', o.categories.join(', ')], ['Members', o.memberLabel || 'All members'],
+      ['Date range', `${D(o.from)} to ${D(o.to)}`], ['Categories', o.categories.join(', ')], ['Members', o.memberLabel || 'All members'], ['Scholar category', o.scholarLabel || 'All'],
       ['Status filter', o.statusFilter ? cap(o.statusFilter) : 'All'], ['Generated', new Date().toLocaleString('en-US')], [],
       ['Total records', s.total], ['Present', s.present], ['Absent (incl. excused)', s.absent], ['  of which Excused', s.excused],
       ['Attendance rate (%)', s.rate], ['Sessions / events', s.events], ['Members', s.members], [],
       ['LEGEND'], ['P', 'Present'], ['A', 'Absent'], ['E', 'Excused (reason in the "Excused Details" sheet)'], ['(blank)', 'No record for that member on that date'], [],
       ['BY CATEGORY'], ['Category', 'Sessions', 'Present', 'Absent (incl. Excused)', 'of which Excused', 'Total', 'Attendance (%)'],
       ...byCat.map(c => [c.category, c.events, c.present, c.absent, c.excused, c.total, c.rate]), [],
+      ['BY SCHOLAR CATEGORY'], ['Scholar category', 'Members', 'Present', 'Absent (incl. Excused)', 'of which Excused', 'Total', 'Attendance (%)'],
+      ...bySch, [],
       ['SHEETS IN THIS FILE'], ['Attendance Sheet: every member (names, grouped by slot) × every date, like a class register'], ['One register per slot / special-event category · Member Summary · Event Summary · Records (full list)'],
     ], [26, 28, 12, 22, 18, 10, 16]), 'Summary');
 
@@ -82,15 +91,18 @@
       const mem = new Map(), gOrder = [];
       rows.forEach(r => {
         const isSys = sys.has(r.category), id = r.member_id != null ? r.member_id : r.member;
-        if (!mem.has(id)) mem.set(id, { name: r.member, home: '', ev: '', cells: Array(cols.length).fill(''), p: 0, a: 0, e: 0 });
+        if (!mem.has(id)) mem.set(id, { name: r.member, sch: r.scholar || 'none', home: '', ev: '', cells: Array(cols.length).fill(''), p: 0, a: 0, e: 0 });
         const m = mem.get(id);
         if (isSys) m.home = r.slot || '';
         if (!isSys && !m.ev) m.ev = r.slot || '';
-        m.cells[idx.get(isSys ? 'S|' + r.date : 'C|' + r.date + '|' + r.event)] = MARK[r.status] || 'A';
-        if (r.status === 'present') m.p++; else if (r.status === 'excused') m.e++; else m.a++;
+        const ci = idx.get(isSys ? 'S|' + r.date : 'C|' + r.date + '|' + r.event), mk1 = MARK[r.status] || 'A';
+        if ((MR[mk1] || 0) > (MR[m.cells[ci]] || 0)) m.cells[ci] = mk1;
       });
       const all = [...mem.values()];
-      all.forEach(m => { m.group = m.home || m.ev || 'No slot'; });
+      all.forEach(m => {
+        m.p = m.cells.filter(c => c === 'P').length; m.e = m.cells.filter(c => c === 'E').length; m.a = m.cells.filter(c => c === 'A').length;
+        m.group = m.home || m.ev || 'No slot';
+      });
       rows.forEach(r => { const g = (sys.has(r.category) ? r.slot : '') || ''; if (g && !gOrder.includes(g)) gOrder.push(g); });
       all.forEach(m => { if (!gOrder.includes(m.group)) gOrder.push(m.group); });
       gOrder.sort((a, b) => (a === 'No slot') - (b === 'No slot'));
@@ -101,23 +113,23 @@
         ['ATTENDANCE SHEET'],
         [`${D(o.from)} to ${D(o.to)} · ${o.categories.join(', ')} · ${all.length} member(s) · ${cols.length} date(s)`],
         ['P = Present   A = Absent   E = Excused   (blank = no record)'], [],
-        ['#', 'Name', 'Slot', ...cols.map(c => SD(c.date)), 'Present', 'Absent', 'Excused', 'Total', 'Rate %'],
-        [...pad(3), ...cols.map(c => (c.sys ? DOW(c.date) : c.event)), ...pad(5)],
+        ['#', 'Name', 'Slot', 'Scholar', ...cols.map(c => SD(c.date)), 'Present', 'Absent', 'Excused', 'Total', 'Rate %'],
+        [...pad(4), ...cols.map(c => (c.sys ? DOW(c.date) : c.event)), ...pad(5)],
       ];
       let n = 0;
       gOrder.forEach(g => {
         const ms = by.get(g);
         if (!ms) return;
         aoa.push([], ['', g.toUpperCase() + '  (' + ms.length + ')']);
-        ms.forEach(m => { n++; const t = m.p + m.a + m.e; aoa.push([n, m.name, m.group, ...m.cells, m.p, m.a, m.e, t, pct(m.p, t)]); });
+        ms.forEach(m => { n++; const t = m.p + m.a + m.e; aoa.push([n, m.name, m.group, sch(m.sch), ...m.cells, m.p, m.a, m.e, t, pct(m.p, t)]); });
       });
       aoa.push([]);
       const cnt = ch => cols.map((_, i) => all.filter(m => m.cells[i] === ch).length);
       const P = cnt('P'), A = cnt('A'), E = cnt('E');
-      const foot = (l, arr) => aoa.push(['', l, '', ...arr, ...pad(5)]);
+      const foot = (l, arr) => aoa.push(['', l, '', '', ...arr, ...pad(5)]);
       foot('Present', P); foot('Absent', A); foot('Excused', E);
       foot('Attendance %', cols.map((_, i) => pct(P[i], P[i] + A[i] + E[i])));
-      const w = [5, 34, 22, ...cols.map(c => (c.sys ? 9 : Math.max(9, Math.min(String(c.event).length + 2, 22)))), 9, 9, 9, 8, 8];
+      const w = [5, 34, 22, 24, ...cols.map(c => (c.sys ? 9 : Math.max(9, Math.min(String(c.event).length + 2, 22)))), 9, 9, 9, 8, 8];
       XLSX.utils.book_append_sheet(wb, mk(aoa, w), sname('Attendance Sheet'));
       wb.SheetNames.unshift(wb.SheetNames.pop()); // names first
     })();
@@ -138,13 +150,13 @@
       const mem = new Map();
       g.rows.forEach(r => {
         const k = r.member_id != null ? r.member_id : r.member;
-        if (!mem.has(k)) mem.set(k, { name: r.member, slot: r.slot || '', cells: Array(cols.length).fill(''), p: 0, a: 0, e: 0 });
+        if (!mem.has(k)) mem.set(k, { name: r.member, sch: r.scholar || 'none', slot: r.slot || '', cells: Array(cols.length).fill(''), p: 0, a: 0, e: 0 });
         const m = mem.get(k), i = idx.get(r.date + '|' + r.event);
         m.cells[i] = MARK[r.status] || 'A';
         if (r.status === 'present') m.p++; else if (r.status === 'excused') m.e++; else m.a++;
       });
       const list = [...mem.values()].sort((a, b) => a.name.localeCompare(b.name));
-      const lead = g.sys ? ['#', 'Name'] : ['#', 'Name', 'Slot'];
+      const lead = g.sys ? ['#', 'Name', 'Scholar'] : ['#', 'Name', 'Slot', 'Scholar'];
       const L = lead.length, pad = n => Array(n).fill('');
       const aoa = [
         [g.title.toUpperCase()],
@@ -155,7 +167,7 @@
       ];
       list.forEach((m, i) => {
         const t = m.p + m.a + m.e;
-        aoa.push([i + 1, m.name, ...(g.sys ? [] : [m.slot]), ...m.cells, m.p, m.a, m.e, t, pct(m.p, t)]);
+        aoa.push([i + 1, m.name, ...(g.sys ? [] : [m.slot]), sch(m.sch), ...m.cells, m.p, m.a, m.e, t, pct(m.p, t)]);
       });
       aoa.push([]);
       const cnt = ch => cols.map((_, i) => list.filter(m => m.cells[i] === ch).length);
@@ -163,7 +175,7 @@
       const foot = (label, arr) => aoa.push([...pad(L - 1), label, ...arr, ...pad(5)]);
       foot('Present', P); foot('Absent', A); foot('Excused', E);
       foot('Attendance %', cols.map((_, i) => pct(P[i], P[i] + A[i] + E[i])));
-      const w = [5, 32, ...(g.sys ? [] : [20]), ...cols.map(c => Math.max(9, Math.min((g.sys ? 9 : String(c.event).length + 2), 22))), 9, 9, 9, 8, 8];
+      const w = [5, 32, ...(g.sys ? [] : [20]), 24, ...cols.map(c => Math.max(9, Math.min((g.sys ? 9 : String(c.event).length + 2), 22))), 9, 9, 9, 8, 8];
       XLSX.utils.book_append_sheet(wb, mk(aoa, w), sname(g.title));
     });
 
@@ -176,13 +188,13 @@
       if (l.done) return;
       if (r.status === 'present') l.done = true; else l.n++;
     });
-    const byMember = group(rows, r => (r.member_id != null ? r.member_id : r.member), r => ({ id: r.member_id != null ? r.member_id : r.member, member: r.member, slot: r.slot || '' }))
+    const byMember = group(rows, r => (r.member_id != null ? r.member_id : r.member), r => ({ id: r.member_id != null ? r.member_id : r.member, member: r.member, slot: r.slot || '', sch: sch(r.scholar) }))
       .sort((a, b) => a.member.localeCompare(b.member));
     XLSX.utils.book_append_sheet(wb, mk([
       ['MEMBER SUMMARY'], [],
-      ['#', 'Member', 'Slot', 'Present', 'Absent', 'of which Excused', 'Total', 'Attendance (%)', 'Missed in a row (latest)'],
-      ...byMember.map((m, i) => [i + 1, m.member, m.slot, m.present, m.absent, m.excused, m.total, m.rate, (last.get(m.id) || { n: 0 }).n]),
-    ], [5, 34, 20, 10, 10, 18, 8, 15, 24]), sname('Member Summary'));
+      ['#', 'Member', 'Slot', 'Scholar', 'Present', 'Absent', 'of which Excused', 'Total', 'Attendance (%)', 'Missed in a row (latest)'],
+      ...byMember.map((m, i) => [i + 1, m.member, m.slot, m.sch, m.present, m.absent, m.excused, m.total, m.rate, (last.get(m.id) || { n: 0 }).n]),
+    ], [5, 34, 20, 24, 10, 10, 18, 8, 15, 24]), sname('Member Summary'));
 
     /* ---- Event Summary ---- */
     const byEvent = group(rows, r => r.date + '|' + r.category + '|' + r.event, r => ({ date: r.date, category: r.category, event: r.event, time: r.event_time })).sort(byTime);
@@ -194,11 +206,11 @@
 
     /* ---- Records (full list) ---- */
     const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date) || String(a.event_time || '').localeCompare(String(b.event_time || '')) || a.member.localeCompare(b.member));
-    const head = ['Date', 'Day', 'Category', 'Event', 'Event Time', 'Member', 'Slot', 'Status', 'Time In'];
+    const head = ['Date', 'Day', 'Category', 'Event', 'Event Time', 'Member', 'Slot', 'Scholar', 'Status', 'Time In'];
     if (o.includeReason) head.push('Reason');
     XLSX.utils.book_append_sheet(wb, mk([
       head,
-      ...sorted.map(r => [D(r.date), DOW(r.date), r.category, r.event, T(r.event_time), r.member, r.slot || '', cap(r.status), T(r.time_in), ...(o.includeReason ? [r.reason || ''] : [])]),
+      ...sorted.map(r => [D(r.date), DOW(r.date), r.category, r.event, T(r.event_time), r.member, r.slot || '', sch(r.scholar), cap(r.status), T(r.time_in), ...(o.includeReason ? [r.reason || ''] : [])]),
     ]), sname('Records'));
 
     /* ---- Excused details ---- */

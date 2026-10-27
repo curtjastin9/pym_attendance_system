@@ -33,7 +33,7 @@ switch ($action) {
     }
 
     case 'get_record_members': {
-        $base = "SELECT y.id, y.full_name, y.status, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id";
+        $base = "SELECT y.id, y.full_name, y.status, y.scholar_type AS scholar, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id";
         if ($LS === null) { $rows = $pdo->query($base . " ORDER BY y.full_name ASC")->fetchAll(); }
         else {
             $L = (int)$LS;
@@ -64,6 +64,10 @@ switch ($action) {
         if (!is_array($mids)) $mids = [];
         $mids = array_values(array_unique(array_filter(array_map('intval', $mids), fn($v) => $v > 0)));
         $memSql = $mids ? ' AND a.member_id IN (' . implode(',', $mids) . ')' : '';
+        $sch = $input['scholar_types'] ?? [];
+        if (!is_array($sch)) $sch = [];
+        $sch = array_values(array_intersect(['none', 'shs', 'college'], array_map('strval', $sch)));
+        $schSql = ($sch && count($sch) < 3) ? " AND y.scholar_type IN ('" . implode("','", $sch) . "')" : '';
         $slotSql = ($LS !== null) ? ' AND a.slot_id = ' . (int)$LS : '';
         $slotFilter = ($LS !== null) ? ' AND y.slot_id = ' . (int)$LS : '';
 
@@ -87,11 +91,11 @@ switch ($action) {
             }
 
             if ($system) {
-                $stmt = $pdo->prepare("SELECT a.member_id, a.att_date AS date, g.name AS event, g.slot_time AS event_time, y.full_name AS member, g.name AS slot, a.status, a.time_in, a.reason
+                $stmt = $pdo->prepare("SELECT a.member_id, a.att_date AS date, g.name AS event, g.slot_time AS event_time, y.full_name AS member, g.name AS slot, a.status, a.time_in, y.scholar_type AS scholar, a.reason
                     FROM attendance a
                     JOIN youth_members y ON y.id = a.member_id
                     LEFT JOIN groups_slots g ON g.id = a.slot_id
-                    WHERE a.att_date BETWEEN ? AND ?$memSql$slotSql");
+                    WHERE a.att_date BETWEEN ? AND ?$memSql$slotSql$schSql");
                 $stmt->execute([$from, $to]);
                 foreach ($stmt->fetchAll() as $r) {
                     $r['category'] = $system['name'];
@@ -101,13 +105,13 @@ switch ($action) {
 
             if ($otherIds) {
                 $ph = implode(',', array_fill(0, count($otherIds), '?'));
-                $stmt = $pdo->prepare("SELECT a.member_id, e.event_date AS date, e.title AS event, e.event_time AS event_time, c.name AS category, y.full_name AS member, g.name AS slot, a.status, a.time_in, a.reason
+                $stmt = $pdo->prepare("SELECT a.member_id, e.event_date AS date, e.title AS event, e.event_time AS event_time, c.name AS category, y.full_name AS member, g.name AS slot, a.status, a.time_in, y.scholar_type AS scholar, a.reason
                     FROM event_attendance a
                     JOIN events e ON e.id = a.event_id
                     JOIN event_categories c ON c.id = e.category_id
                     JOIN youth_members y ON y.id = a.member_id
                     LEFT JOIN groups_slots g ON g.id = y.slot_id
-                    WHERE e.category_id IN ($ph) AND e.event_date BETWEEN ? AND ?$memSql");
+                    WHERE e.category_id IN ($ph) AND e.event_date BETWEEN ? AND ?$memSql$schSql");
                 $stmt->execute(array_merge($otherIds, [$from, $to]));
                 foreach ($stmt->fetchAll() as $r) $rows[] = $r;
             }
@@ -126,7 +130,7 @@ switch ($action) {
 
             $today = (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
             $memFilter = $mids ? ' AND y.id IN (' . implode(',', $mids) . ')' : '';
-            $members = $pdo->query("SELECT y.id, y.full_name, y.slot_id, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id WHERE y.status = 'active'$memFilter")->fetchAll();
+            $members = $pdo->query("SELECT y.id, y.full_name, y.slot_id, y.scholar_type AS scholar, g.name AS slot FROM youth_members y LEFT JOIN groups_slots g ON g.id = y.slot_id WHERE y.status = 'active'$memFilter$schSql")->fetchAll();
 
             if ($system) {
                 $first = pymFirstDate($pdo);
@@ -149,7 +153,7 @@ switch ($action) {
                                 if (isset($have[$m['id'] . '|' . $system['name'] . '|' . $ds . '|' . $sl['name']])) continue;
                                 if (isset($att[$m['id'] . '|' . $ds])) continue; // attended another slot that day
                                 $rows[] = ['member_id' => $m['id'], 'date' => $ds, 'event' => $sl['name'], 'event_time' => $sl['slot_time'],
-                                           'category' => $system['name'], 'member' => $m['full_name'], 'slot' => $sl['name'], 'status' => 'absent', 'time_in' => null, 'reason' => null];
+                                           'category' => $system['name'], 'member' => $m['full_name'], 'slot' => $sl['name'], 'status' => 'absent', 'time_in' => null, 'reason' => null, 'scholar' => $m['scholar']];
                             }
                         }
                     }
@@ -168,7 +172,7 @@ switch ($action) {
                     foreach ($members as $m) {
                         if (isset($have[$m['id'] . '|' . $ev['category'] . '|' . $ev['event_date'] . '|' . $ev['title']])) continue;
                         $rows[] = ['member_id' => $m['id'], 'date' => $ev['event_date'], 'event' => $ev['title'], 'event_time' => $ev['event_time'],
-                                   'category' => $ev['category'], 'member' => $m['full_name'], 'slot' => $m['slot'], 'status' => 'absent', 'time_in' => null, 'reason' => null];
+                                   'category' => $ev['category'], 'member' => $m['full_name'], 'slot' => $m['slot'], 'status' => 'absent', 'time_in' => null, 'reason' => null, 'scholar' => $m['scholar']];
                     }
                 }
             }
