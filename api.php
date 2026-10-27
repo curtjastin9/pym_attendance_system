@@ -459,7 +459,20 @@ switch ($action) {
         $id         = $input['id'] ?? '';
         $color      = $input['color'] ?? '#4F8EF7';
         $leader_ids = $input['leader_ids'] ?? [];
-        if (!$id) respond(false, 'Invalid slot. The 6 schedule slots are fixed and cannot be added.');
+        $sName = trim($input['name'] ?? '');
+        $sDow  = $input['dow'] ?? '';
+        $sTime = trim((string)($input['slot_time'] ?? ''));
+        $timeOk = (bool)preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $sTime);
+        if ($timeOk && strlen($sTime) === 5) $sTime .= ':00';
+        $dowOk = ($sDow !== '' && is_numeric($sDow) && (int)$sDow >= 0 && (int)$sDow <= 6);
+        $createdSlot = false;
+        if (!$id) {
+            if ($sName === '' || !$dowOk || !$timeOk) respond(false, 'Please enter the slot name, day and time.');
+            $id = nextId($pdo, 'groups_slots');
+            $pdo->prepare("INSERT INTO groups_slots (id, name, color, dow, slot_time, leader_id) VALUES (?,?,?,?,?,NULL)")
+                ->execute([$id, substr($sName, 0, 100), $color, (int)$sDow, $sTime]);
+            $createdSlot = true;
+        }
 
         if (!is_array($leader_ids)) $leader_ids = [];
         $leader_ids = array_values(array_unique(array_filter(array_map('intval', $leader_ids), fn($v) => $v > 0)));
@@ -498,6 +511,9 @@ switch ($action) {
                 $sync->execute([$id, $uid]);
             }
 
+            if (!$createdSlot && $sName !== '' && $dowOk && $timeOk) {
+                $pdo->prepare("UPDATE groups_slots SET name = ?, dow = ?, slot_time = ? WHERE id = ?")->execute([substr($sName, 0, 100), (int)$sDow, $sTime, $id]);
+            }
             // keep legacy column in sync (first leader or NULL)
             $pdo->prepare("UPDATE groups_slots SET color = ?, leader_id = ? WHERE id = ?")
                 ->execute([$color, $leader_ids[0] ?? null, $id]);
@@ -509,7 +525,7 @@ switch ($action) {
         }
 
         logActivity($pdo, 'save_slot', 'Slot #' . $id, 'Leaders set: ' . ($leader_ids ? implode(', ', array_map(fn($x) => userLabel($pdo, $x), $leader_ids)) : 'none'));
-        respond(true, 'Slot updated successfully.');
+        respond(true, $createdSlot ? 'Slot added successfully.' : 'Slot updated successfully.');
     }
 
     case 'delete_slot': {

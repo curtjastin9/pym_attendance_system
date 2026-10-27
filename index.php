@@ -558,17 +558,32 @@ if (!isset($_SESSION['user_id'])) {
           <h3>Groups / Slots</h3>
           <p class="card-sub">Mass slot groups and their leaders</p>
         </div>
+        <button class="add-btn" id="showSlotFormBtn" style="display:none"><i class="fas fa-plus"></i> Add Time Slot</button>
       </div>
       <form id="slotForm" class="data-form hidden">
         <input type="hidden" name="id"/>
         <div class="form-row">
           <div class="form-field">
             <label>Slot Name</label>
-            <input type="text" name="name" disabled/>
+            <input type="text" name="name" required placeholder="e.g. Sunday 3:00 PM"/>
           </div>
           <div class="form-field">
             <label>Color</label>
             <input type="color" name="color" value="#4F8EF7"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Day</label>
+            <select name="dow" required>
+              <option value="">— Select day —</option>
+              <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option>
+              <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Time</label>
+            <input type="time" name="slot_time" required/>
           </div>
         </div>
         <div class="form-row">
@@ -676,21 +691,36 @@ if (!isset($_SESSION['user_id'])) {
         <div class="card-header">
           <div>
             <h3>Groups / Slots Management</h3>
-            <p class="card-sub">Assign leaders and a color to each of the 6 fixed schedule slots</p>
+            <p class="card-sub">Add or edit time slots, and assign leaders and a color</p>
           </div>
+          <button class="add-btn" id="adminShowSlotFormBtn"><i class="fas fa-plus"></i> Add Time Slot</button>
         </div>
         <form id="adminSlotForm" class="data-form hidden">
           <input type="hidden" name="id"/>
           <div class="form-row">
             <div class="form-field">
               <label>Slot Name</label>
-              <input type="text" name="name" disabled/>
+              <input type="text" name="name" required placeholder="e.g. Sunday 3:00 PM"/>
             </div>
             <div class="form-field">
               <label>Color</label>
               <input type="color" name="color" value="#4F8EF7"/>
             </div>
           </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Day</label>
+            <select name="dow" required>
+              <option value="">— Select day —</option>
+              <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option>
+              <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Time</label>
+            <input type="time" name="slot_time" required/>
+          </div>
+        </div>
           <div class="form-row">
             <div class="form-field">
               <label>Slot Leaders <small>(max 5)</small></label>
@@ -934,7 +964,7 @@ Pedro Reyes&#9;inactive&#9;Non Scholar"></textarea>
 </nav>
 <div class="overlay" id="overlay"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=7"></script>
 <script src="coy.js?v=6"></script>
 <script src="export.js?v=5"></script>
 <script src="records.js?v=7"></script>

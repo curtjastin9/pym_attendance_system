@@ -592,9 +592,15 @@ function initSlotsPage() {
   const form = document.getElementById('slotForm');
   const cancelBtn = document.getElementById('cancelSlotFormBtn');
   if (cancelBtn) cancelBtn.addEventListener('click', () => { form.classList.add('hidden'); form.reset(); });
+  const addSlotBtn = document.getElementById('showSlotFormBtn');
+  if (addSlotBtn) addSlotBtn.addEventListener('click', async () => {
+    form.reset(); form.id.value = '';
+    await populateLeaderSelect(document.getElementById('slotLeaderSelect'), [], null);
+    form.classList.remove('hidden'); form.scrollIntoView({ behavior: 'smooth' });
+  });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const data = { id: form.id.value, color: form.color.value,
+    const data = { id: form.id.value, name: form.elements['name'].value.trim(), dow: form.elements['dow'].value, slot_time: form.elements['slot_time'].value, color: form.color.value,
                    leader_ids: getCheckedLeaders(document.getElementById('slotLeaderSelect')) };
     const res = await apiCall('save_slot', data);
     alert(res.message);
@@ -664,7 +670,9 @@ async function editSlot(id, isAdmin = false) {
   const form = document.getElementById(isAdmin ? 'adminSlotForm' : 'slotForm');
   const box  = document.getElementById(isAdmin ? 'adminSlotLeaderSelect' : 'slotLeaderSelect');
   await populateLeaderSelect(box, s.leaders.map(l => l.id), s.id);
-  form.id.value = s.id; form.name.value = s.name;
+  form.id.value = s.id; form.elements['name'].value = s.name;
+  form.elements['dow'].value = String(s.dow);
+  form.elements['slot_time'].value = String(s.slot_time || '').substring(0, 5);
   form.color.value = s.color || '#4F8EF7';
   form.classList.remove('hidden'); form.scrollIntoView({ behavior: 'smooth' });
 }
@@ -775,7 +783,7 @@ async function loadCalendar() {
   if (pb) { const atMin = calYear * 12 + calMonth <= 2026 * 12 + 10; pb.disabled = atMin; pb.style.opacity = atMin ? '.35' : ''; pb.style.cursor = atMin ? 'not-allowed' : ''; }
   document.getElementById('calMonthLabel').textContent = CURRENT_USER && CURRENT_USER.role === 'leader'
     ? 'Normal Serve · Your assigned slot schedule'
-    : 'Normal Serve · Sat 6PM · Sun 7AM, 8:30AM, 10AM, 5PM, 7PM';
+    : 'Normal Serve · All weekly time slots';
 
   grid.innerHTML = '';
   d.calendar.forEach(day => {
@@ -961,9 +969,15 @@ function initAdminPanel() {
   const adminSlotForm = document.getElementById('adminSlotForm');
   const adminCancelSlBtn = document.getElementById('adminCancelSlotFormBtn');
   adminCancelSlBtn.addEventListener('click', () => { adminSlotForm.classList.add('hidden'); adminSlotForm.reset(); });
+  const adminAddSlot = document.getElementById('adminShowSlotFormBtn');
+  if (adminAddSlot) adminAddSlot.addEventListener('click', async () => {
+    adminSlotForm.reset(); adminSlotForm.id.value = '';
+    await populateLeaderSelect(document.getElementById('adminSlotLeaderSelect'), [], null);
+    adminSlotForm.classList.remove('hidden'); adminSlotForm.scrollIntoView({ behavior: 'smooth' });
+  });
   adminSlotForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const data = { id: adminSlotForm.id.value, color: adminSlotForm.color.value,
+    const data = { id: adminSlotForm.id.value, name: adminSlotForm.elements['name'].value.trim(), dow: adminSlotForm.elements['dow'].value, slot_time: adminSlotForm.elements['slot_time'].value, color: adminSlotForm.color.value,
                    leader_ids: getCheckedLeaders(document.getElementById('adminSlotLeaderSelect')) };
     const res = await apiCall('save_slot', data);
     alert(res.message);
@@ -1130,7 +1144,7 @@ async function loadAdminCategories() {
     const sys = Number(c.is_system) === 1;
     let body;
     if (sys) {
-      body = '<p class="cat-note">Fixed weekly slots: Saturday 6:00 PM · Sunday 7:00 AM, 8:30 AM, 10:00 AM, 5:00 PM, 7:00 PM. Assign leaders in Manage Groups / Slots.</p>';
+      body = '<p class="cat-note">Weekly time slots are managed in Manage Groups / Slots (add, edit and assign leaders).</p>';
     } else if (!c.events.length) {
       body = '<p class="empty-msg">No events in this category yet.</p>';
     } else {
