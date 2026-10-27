@@ -150,3 +150,61 @@
     setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   });
 })();
+
+/* ---------- Time Slot box in the Youth Members edit/add form ---------- */
+(function () {
+  const $ = id => document.getElementById(id);
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  let SLOTS = null;
+
+  async function loadSlotsList() {
+    if (SLOTS) return SLOTS;
+    const r = await apiCall('get_slots');
+    SLOTS = r.success ? r.data : [];
+    return SLOTS;
+  }
+  async function fillSelect(sel) {
+    const cur = sel.value;
+    const slots = await loadSlotsList();
+    sel.innerHTML = '<option value="">— None —</option>' + slots.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+    sel.value = cur;
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    const form = $('youthForm');
+    if (!form || typeof apiCall !== 'function') return;
+    const s = await apiCall('check_session');
+    if (!(s.success && s.data.role === 'secretariat')) return;
+
+    const row = document.createElement('div');
+    row.className = 'form-row';
+    row.innerHTML = '<div class="form-field"><label>Time Slot</label><select name="slot_id" id="youthSlotSel"><option value="">— None —</option></select></div>';
+    const hint = form.querySelector('p');
+    if (hint) hint.remove();
+    form.querySelector('.form-actions').before(row);
+    const sel = $('youthSlotSel');
+    await fillSelect(sel);
+
+    $('showYouthFormBtn').addEventListener('click', () => { sel.value = ''; fillSelect(sel); });
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault(); e.stopImmediatePropagation();
+      let data = {
+        id: form.id.value, full_name: form.full_name.value.trim(), status: form.status.value,
+        scholar_type: form.elements['scholar_type'].value, slot_id: sel.value
+      };
+      if (form.id.value && form.dataset.member) data = Object.assign(JSON.parse(form.dataset.member), data);
+      const res = await apiCall('save_youth', data);
+      alert(res.message);
+      if (res.success) { form.reset(); form.dataset.member = ''; form.classList.add('hidden'); SLOTS = null; loadYouth(); }
+    }, true);
+
+    const _ey = editYouth;
+    editYouth = async function (id, list) {
+      _ey(id, list);
+      const m = list.find(x => String(x.id) === String(id));
+      await fillSelect(sel);
+      sel.value = m && m.slot_id ? String(m.slot_id) : '';
+    };
+  });
+})();
