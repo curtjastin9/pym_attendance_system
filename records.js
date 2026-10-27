@@ -414,9 +414,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     recRender();
   });
 
-  // Events and Groups/Slots now live in the Admin Panel for the Secretariat
-  const s = await apiCall('check_session');
-  if (s.success && s.data.role === 'secretariat') {
-    document.querySelectorAll('.leader-only').forEach(el => { el.style.display = 'none'; });
-  }
 });

@@ -196,17 +196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     sb.querySelector('input').addEventListener('input', applyYouthFilter);
   }
 
-  // Leaders can't bulk-create new members
-  const s = await apiCall('check_session');
-  if (s.success && s.data.role === 'secretariat') {
-    // Events and Groups/Slots are managed inside the Admin Panel
-    ['events', 'groups'].forEach(p => {
-      const nav = document.querySelector(`.nav-item[data-page="${p}"]`);
-      if (nav) nav.style.display = 'none';
-    });
-    const sec = Array.from(document.querySelectorAll('.nav-section')).find(n => n.textContent.trim() === 'Ministry');
-    if (sec) sec.style.display = 'none';
-  }
+  // Events and Groups/Slots stay visible in the sidebar for the Secretariat
 });
 
 /* ------------------------------------------------------------
