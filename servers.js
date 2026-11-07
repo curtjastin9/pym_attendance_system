@@ -1,9 +1,10 @@
-/* PYM — Events: Type = Event Category, "needs servers" checkbox + typed server names. Loaded last on index.php. */
+/* PYM — Events: Type = Event Category, "needs servers" checkbox + typed server names, and "multiple slots" (pick several dates for one event). Loaded last on index.php. */
 (function () {
   const css = `
   .srv-box{margin:4px 0 14px}
   .srv-check{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:700;color:var(--text-primary);cursor:pointer;padding:6px 0}
   .srv-check input{width:18px;height:18px;accent-color:var(--sapphire)}
+  .srv-check input:disabled+span{opacity:.5}
   .srv-panel{border:1.5px dashed var(--border-mid);border-radius:var(--radius-sm);padding:14px;background:var(--surface);margin-top:6px}
   .srv-note{font-size:12px;color:var(--text-soft);margin-bottom:10px;line-height:1.5}
   .srv-search{position:relative;max-width:420px}
@@ -17,10 +18,18 @@
   .srv-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
   .srv-chip{display:inline-flex;align-items:center;gap:6px;background:var(--sapphire-pale);border:1px solid #BFDBFE;color:var(--sapphire);font-size:12px;font-weight:700;padding:4px 6px 4px 11px;border-radius:99px}
   .srv-chip button{border:none;background:rgba(0,0,0,.08);width:18px;height:18px;border-radius:50%;font-size:11px;line-height:1;color:inherit}
-  .srv-empty{font-size:11.5px;color:var(--text-faint);font-style:italic}`;
+  .srv-empty{font-size:11.5px;color:var(--text-faint);font-style:italic}
+  .mds-box{margin:4px 0 14px}
+  .mds-panel{border:1.5px dashed var(--amber);border-radius:var(--radius-sm);padding:14px;background:#FFFBEB;margin-top:6px}
+  .mds-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .mds-row input[type=date]{padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;outline:none;background:#fff}
+  .mds-add{border:1.5px solid var(--amber);background:var(--amber-pale);color:var(--amber);font-size:12.5px;font-weight:800;padding:10px 16px;border-radius:var(--radius-sm)}
+  .mds-add:hover{background:var(--amber);color:#fff}
+  .mds-chip{background:var(--amber-pale);border-color:#FCD34D;color:#92400E}`;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
   const $ = id => document.getElementById(id);
+  const E = s => escapeHtml(s);
   let YOUTH = null;
   async function youth() {
     if (YOUTH) return YOUTH;
@@ -36,10 +45,11 @@
     const r = await apiCall('get_categories');
     const cats = r.success ? r.data.filter(c => Number(c.is_system) !== 1) : [];
     const cur = sel.value;
-    sel.innerHTML = '<option value="">— Select category —</option>' + cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    sel.innerHTML = '<option value="">— Select category —</option>' + cats.map(c => `<option value="${c.id}">${E(c.name)}</option>`).join('');
     sel.value = cur;
   }
 
+  /* ---------- "Needs servers" ---------- */
   function mount(form) {
     const box = document.createElement('div');
     box.className = 'srv-box';
@@ -57,7 +67,7 @@
 
     const draw = () => {
       chips.innerHTML = sel.size
-        ? [...sel].map(([id, n]) => `<span class="srv-chip">${escapeHtml(n)}<button type="button" data-rm="${id}" aria-label="Remove">&times;</button></span>`).join('')
+        ? [...sel].map(([id, n]) => `<span class="srv-chip">${E(n)}<button type="button" data-rm="${id}" aria-label="Remove">&times;</button></span>`).join('')
         : '<span class="srv-empty">No servers added yet.</span>';
     };
     const toggle = () => panel.classList.toggle('hidden', !on.checked);
@@ -66,7 +76,7 @@
       const all = await youth();
       const items = all.filter(y => !sel.has(String(y.id)) && (!q || y.full_name.toLowerCase().includes(q))).slice(0, 40);
       list.innerHTML = items.length
-        ? items.map(y => `<div class="srv-opt" data-id="${y.id}" data-name="${escapeHtml(y.full_name)}">${escapeHtml(y.full_name)}</div>`).join('')
+        ? items.map(y => `<div class="srv-opt" data-id="${y.id}" data-name="${E(y.full_name)}">${E(y.full_name)}</div>`).join('')
         : '<div class="srv-none">No match</div>';
       list.classList.remove('hidden');
     };
@@ -84,6 +94,7 @@
     document.addEventListener('mousedown', e => { if (!e.target.closest('.srv-search')) list.classList.add('hidden'); });
 
     const api = {
+      box,
       get() { return { has_servers: on.checked ? 1 : 0, server_ids: on.checked ? [...sel.keys()] : [] }; },
       set(has, servers) {
         on.checked = !!has; sel.clear();
@@ -95,6 +106,76 @@
     form.addEventListener('reset', () => setTimeout(api.reset, 0));
     draw();
     return api;
+  }
+
+  /* ---------- "Multiple slots?" = same event on several dates ---------- */
+  function mountDates(form, afterBox) {
+    const dateInput = form.elements['event_date'];
+    const dateField = dateInput.closest('.form-field');
+    const box = document.createElement('div');
+    box.className = 'mds-box';
+    box.innerHTML = `
+      <label class="srv-check"><input type="checkbox" class="mds-on"/> <span>This event has multiple slots (select several dates)</span></label>
+      <div class="mds-panel hidden">
+        <p class="srv-note">Pick every date for this event. One event is created for each date, with the same title, time, location and servers.</p>
+        <div class="mds-row"><input type="date" class="mds-in"/><button type="button" class="mds-add"><i class="fas fa-plus"></i> Add date</button></div>
+        <div class="srv-chips"></div>
+      </div>`;
+    afterBox.after(box);
+    const on = box.querySelector('.mds-on'), panel = box.querySelector('.mds-panel'), inp = box.querySelector('.mds-in'),
+          addBtn = box.querySelector('.mds-add'), chips = box.querySelector('.srv-chips');
+    const dates = new Set();
+
+    const draw = () => {
+      const arr = [...dates].sort();
+      chips.innerHTML = arr.length
+        ? arr.map(d => `<span class="srv-chip mds-chip">${E(formatDate(d))}<button type="button" data-rm="${d}" aria-label="Remove">&times;</button></span>`).join('')
+        : '<span class="srv-empty">No dates added yet.</span>';
+    };
+    const toggle = () => {
+      panel.classList.toggle('hidden', !on.checked);
+      dateField.classList.toggle('hidden', on.checked);
+      dateInput.required = !on.checked;
+    };
+    const add = () => {
+      if (!inp.value) { alert('Please pick a date first.'); return; }
+      dates.add(inp.value); inp.value = ''; draw();
+    };
+
+    on.addEventListener('change', () => {
+      if (on.checked && dateInput.value) { dates.add(dateInput.value); draw(); }
+      toggle();
+    });
+    addBtn.addEventListener('click', add);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    chips.addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (b) { dates.delete(b.dataset.rm); draw(); } });
+
+    const api = {
+      get() { return { on: on.checked, dates: on.checked ? [...dates].sort() : [] }; },
+      lock(v) { // editing an existing event: single date only
+        if (v) { on.checked = false; dates.clear(); draw(); toggle(); }
+        on.disabled = !!v; box.style.opacity = v ? '.5' : '';
+      },
+      reset() { on.checked = false; on.disabled = false; box.style.opacity = ''; dates.clear(); inp.value = ''; draw(); toggle(); }
+    };
+    form.addEventListener('reset', () => setTimeout(api.reset, 0));
+    draw();
+    return api;
+  }
+
+  async function saveEvent(form, srv, mds, base, after) {
+    const md = mds.get();
+    if (md.on && !md.dates.length) { alert('Add at least one date.'); return; }
+    const list = md.on ? md.dates : [base.event_date];
+    let ok = 0, last = '';
+    for (const d of list) {
+      const res = await apiCall('save_category_event', Object.assign({}, base, srv.get(), { event_date: d }));
+      if (res.success) ok++; else { last = res.message; break; }
+    }
+    if (ok < list.length) { alert((ok ? ok + ' event(s) saved. ' : '') + last); if (ok) after(); return; }
+    alert(md.on ? ok + ' events added.' : (base.id ? 'Event updated successfully.' : 'Event added successfully.'));
+    form.reset(); form.classList.add('hidden');
+    after();
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
@@ -110,43 +191,42 @@
       fld.innerHTML = '<label>Category</label><select name="category_id" required><option value="">— Select category —</option></select>';
     }
     const admSrv = mount(adm);
-    adm.__srv = admSrv;
+    const admMds = mountDates(adm, admSrv.box);
+    adm.__srv = admSrv; adm.__mds = admMds;
     const catSrv = cev ? mount(cev) : null;
+    const catMds = cev ? mountDates(cev, catSrv.box) : null;
     refreshCats();
 
-    $('adminShowEventFormBtn').addEventListener('click', refreshCats);
+    $('adminShowEventFormBtn').addEventListener('click', () => { refreshCats(); admMds.lock(false); });
+    const addCat = $('showCategoryFormBtn');
 
-    adm.addEventListener('submit', async e => {
+    adm.addEventListener('submit', e => {
       e.preventDefault(); e.stopImmediatePropagation();
       const f = adm.elements;
       if (!f['category_id'].value) { alert('Please select a category.'); return; }
-      const res = await apiCall('save_category_event', Object.assign({
+      saveEvent(adm, admSrv, admMds, {
         id: f['id'].value, category_id: f['category_id'].value, title: f['title'].value.trim(),
         event_date: f['event_date'].value, event_time: f['event_time'].value, location: f['location'].value.trim()
-      }, admSrv.get()));
-      alert(res.message);
-      if (res.success) { adm.reset(); adm.classList.add('hidden'); loadEvents(true); }
+      }, () => loadEvents(true));
     }, true);
 
     if (cev) {
-      cev.addEventListener('submit', async e => {
+      cev.addEventListener('submit', e => {
         e.preventDefault(); e.stopImmediatePropagation();
         const f = cev.elements;
-        const res = await apiCall('save_category_event', Object.assign({
+        saveEvent(cev, catSrv, catMds, {
           id: f['id'].value, category_id: f['category_id'].value, title: f['title'].value.trim(),
           event_date: f['event_date'].value, event_time: f['event_time'].value, location: f['location'].value.trim()
-        }, catSrv.get()));
-        alert(res.message);
-        if (res.success) { cev.reset(); cev.classList.add('hidden'); loadAdminCategories(); }
+        }, () => loadAdminCategories());
       }, true);
 
-      // Editing an event inside Event Categories: fill the servers part
       document.addEventListener('click', e => {
-        const b = e.target.closest('.cat-ev-edit');
+        const b = e.target.closest('.cat-ev-edit, .cat-add-event');
         if (!b) return;
+        if (b.classList.contains('cat-add-event')) { catMds.lock(false); return; }
         let found = null;
         ALL_CATEGORIES.forEach(c => c.events.forEach(ev => { if (String(ev.id) === b.dataset.id) found = ev; }));
-        if (found) catSrv.set(Number(found.has_servers) === 1, found.servers);
+        if (found) { catSrv.set(Number(found.has_servers) === 1, found.servers); catMds.lock(true); }
       });
     }
   });
@@ -165,6 +245,7 @@
     f['event_date'].value = ev.event_date; f['event_time'].value = ev.event_time ? ev.event_time.substring(0, 5) : '';
     f['location'].value = ev.location || '';
     if (form.__srv) form.__srv.set(Number(ev.has_servers) === 1, ev.servers);
+    if (form.__mds) form.__mds.lock(true);
     form.classList.remove('hidden'); form.scrollIntoView({ behavior: 'smooth' });
   };
 })();

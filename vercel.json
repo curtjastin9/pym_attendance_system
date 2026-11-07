@@ -10,6 +10,7 @@
     { "src": "api_attendance.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
     { "src": "api_account.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
     { "src": "api_slotchange.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
+    { "src": "api_eventslots.php", "use": "vercel-php@0.7.3", "config": { "includeFiles": ["*.php"] } },
     { "src": "**/*.png", "use": "@vercel/static" },
     { "src": "**/*.jpg", "use": "@vercel/static" },
     { "src": "**/*.jpeg", "use": "@vercel/static" },
@@ -24,7 +25,7 @@
   "routes": [
     { "src": "/", "dest": "/home.php" },
     { "src": "/(index|login)\\.html", "dest": "/home.php" },
-    { "src": "/(home|index|login|api|api_records|api_coy|api_attendance|api_account|api_slotchange)\\.php", "dest": "/$1.php" },
+    { "src": "/(home|index|login|api|api_records|api_coy|api_attendance|api_account|api_slotchange|api_eventslots)\\.php", "dest": "/$1.php" },
     { "src": "/(session|config|security|attendance_schema|mail)\\.php", "status": 404, "dest": "/home.php" },
     { "handle": "filesystem" },
     { "src": "/logo\\.png", "dest": "/LOGO.png" }
