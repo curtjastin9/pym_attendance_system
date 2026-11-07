@@ -25,7 +25,20 @@
   .mds-row input[type=date]{padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;outline:none;background:#fff}
   .mds-add{border:1.5px solid var(--amber);background:var(--amber-pale);color:var(--amber);font-size:12.5px;font-weight:800;padding:10px 16px;border-radius:var(--radius-sm)}
   .mds-add:hover{background:var(--amber);color:#fff}
-  .mds-chip{background:var(--amber-pale);border-color:#FCD34D;color:#92400E}`;
+  .mds-chip{background:var(--amber-pale);border-color:#FCD34D;color:#92400E}
+  .mcal{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;max-width:420px}
+  .mcal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .mcal-title{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;font-weight:800;color:var(--text-primary)}
+  .mcal-nav button{width:34px;height:34px;border:1.5px solid var(--border);background:var(--surface);border-radius:8px;font-size:16px;font-weight:800;color:var(--text-mid)}
+  .mcal-nav button:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .mcal-dow,.mcal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+  .mcal-dow div{text-align:center;font-size:10px;font-weight:800;letter-spacing:.8px;color:var(--text-faint);padding:6px 0}
+  .mcal-day{aspect-ratio:1/1;min-height:40px;border:1.5px solid transparent;border-radius:10px;background:var(--sapphire-pale);font-size:14px;font-weight:700;color:var(--text-primary);transition:all .15s}
+  .mcal-day:hover{border-color:var(--sapphire-glow)}
+  .mcal-day.today{border-color:var(--amber)}
+  .mcal-day.sel{background:var(--sapphire);color:#fff;border-color:var(--sapphire);box-shadow:var(--shadow-blue)}
+  .mcal-blank{aspect-ratio:1/1;min-height:40px}
+  .mcal-count{font-size:12px;font-weight:700;color:var(--text-soft);margin-top:10px}`;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
   const $ = id => document.getElementById(id);
@@ -108,7 +121,7 @@
     return api;
   }
 
-  /* ---------- "Multiple slots?" = same event on several dates ---------- */
+  /* ---------- "Multiple slots?" = same event on several dates (calendar picker) ---------- */
   function mountDates(form, afterBox) {
     const dateInput = form.elements['event_date'];
     const dateField = dateInput.closest('.form-field');
@@ -117,46 +130,69 @@
     box.innerHTML = `
       <label class="srv-check"><input type="checkbox" class="mds-on"/> <span>This event has multiple slots (select several dates)</span></label>
       <div class="mds-panel hidden">
-        <p class="srv-note">Pick every date for this event. One event is created for each date, with the same title, time, location and servers.</p>
-        <div class="mds-row"><input type="date" class="mds-in"/><button type="button" class="mds-add"><i class="fas fa-plus"></i> Add date</button></div>
+        <p class="srv-note">Tap every date for this event on the calendar (tap again to remove). One event is created for each date, with the same title, time, location and servers.</p>
+        <div class="mcal">
+          <div class="mcal-nav"><button type="button" class="mcal-prev" aria-label="Previous month">&lsaquo;</button><span class="mcal-title"></span><button type="button" class="mcal-next" aria-label="Next month">&rsaquo;</button></div>
+          <div class="mcal-dow"><div>SU</div><div>MO</div><div>TU</div><div>WE</div><div>TH</div><div>FR</div><div>SA</div></div>
+          <div class="mcal-grid"></div>
+        </div>
+        <div class="mcal-count"></div>
         <div class="srv-chips"></div>
       </div>`;
     afterBox.after(box);
-    const on = box.querySelector('.mds-on'), panel = box.querySelector('.mds-panel'), inp = box.querySelector('.mds-in'),
-          addBtn = box.querySelector('.mds-add'), chips = box.querySelector('.srv-chips');
+    const on = box.querySelector('.mds-on'), panel = box.querySelector('.mds-panel'), chips = box.querySelector('.srv-chips'),
+          grid = box.querySelector('.mcal-grid'), title = box.querySelector('.mcal-title'), count = box.querySelector('.mcal-count');
     const dates = new Set();
+    const MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const ymd = (y, m, d) => y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    const now = new Date();
+    let vy = now.getFullYear(), vm = now.getMonth();
+    const todayStr = ymd(now.getFullYear(), now.getMonth(), now.getDate());
 
     const draw = () => {
+      title.textContent = MN[vm] + ' ' + vy;
+      const first = new Date(vy, vm, 1).getDay(), days = new Date(vy, vm + 1, 0).getDate();
+      let h = '';
+      for (let i = 0; i < first; i++) h += '<div class="mcal-blank"></div>';
+      for (let d = 1; d <= days; d++) {
+        const ds = ymd(vy, vm, d);
+        h += `<button type="button" class="mcal-day${dates.has(ds) ? ' sel' : ''}${ds === todayStr ? ' today' : ''}" data-d="${ds}">${d}</button>`;
+      }
+      grid.innerHTML = h;
       const arr = [...dates].sort();
-      chips.innerHTML = arr.length
-        ? arr.map(d => `<span class="srv-chip mds-chip">${E(formatDate(d))}<button type="button" data-rm="${d}" aria-label="Remove">&times;</button></span>`).join('')
-        : '<span class="srv-empty">No dates added yet.</span>';
+      count.textContent = arr.length ? arr.length + ' date(s) selected' : 'No dates selected yet.';
+      chips.innerHTML = arr.map(d => `<span class="srv-chip mds-chip">${E(formatDate(d))}<button type="button" data-rm="${d}" aria-label="Remove">&times;</button></span>`).join('');
     };
     const toggle = () => {
       panel.classList.toggle('hidden', !on.checked);
       dateField.classList.toggle('hidden', on.checked);
       dateInput.required = !on.checked;
     };
-    const add = () => {
-      if (!inp.value) { alert('Please pick a date first.'); return; }
-      dates.add(inp.value); inp.value = ''; draw();
-    };
 
     on.addEventListener('change', () => {
-      if (on.checked && dateInput.value) { dates.add(dateInput.value); draw(); }
-      toggle();
+      if (on.checked && dateInput.value) {
+        dates.add(dateInput.value);
+        const p = dateInput.value.split('-'); vy = +p[0]; vm = +p[1] - 1;
+      }
+      toggle(); draw();
     });
-    addBtn.addEventListener('click', add);
-    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    box.querySelector('.mcal-prev').addEventListener('click', () => { vm--; if (vm < 0) { vm = 11; vy--; } draw(); });
+    box.querySelector('.mcal-next').addEventListener('click', () => { vm++; if (vm > 11) { vm = 0; vy++; } draw(); });
+    grid.addEventListener('click', e => {
+      const b = e.target.closest('.mcal-day'); if (!b) return;
+      const d = b.dataset.d;
+      if (dates.has(d)) dates.delete(d); else dates.add(d);
+      draw();
+    });
     chips.addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (b) { dates.delete(b.dataset.rm); draw(); } });
 
     const api = {
       get() { return { on: on.checked, dates: on.checked ? [...dates].sort() : [] }; },
       lock(v) { // editing an existing event: single date only
-        if (v) { on.checked = false; dates.clear(); draw(); toggle(); }
+        if (v) { on.checked = false; dates.clear(); toggle(); draw(); }
         on.disabled = !!v; box.style.opacity = v ? '.5' : '';
       },
-      reset() { on.checked = false; on.disabled = false; box.style.opacity = ''; dates.clear(); inp.value = ''; draw(); toggle(); }
+      reset() { on.checked = false; on.disabled = false; box.style.opacity = ''; dates.clear(); toggle(); draw(); }
     };
     form.addEventListener('reset', () => setTimeout(api.reset, 0));
     draw();
@@ -198,7 +234,6 @@
     refreshCats();
 
     $('adminShowEventFormBtn').addEventListener('click', () => { refreshCats(); admMds.lock(false); });
-    const addCat = $('showCategoryFormBtn');
 
     adm.addEventListener('submit', e => {
       e.preventDefault(); e.stopImmediatePropagation();
