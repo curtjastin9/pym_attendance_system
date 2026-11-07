@@ -3,6 +3,7 @@ require_once __DIR__ . '/session.php';
 header('Content-Type: application/json');
 require_once 'config.php';
 require_once 'security.php';
+require_once 'eventleaders_lib.php';
 
 $action = $_GET['action'] ?? '';
 $input  = json_decode(file_get_contents('php://input'), true);
@@ -15,10 +16,14 @@ function respond($success, $message = '', $data = null) {
 function requireLogin() {
     if (!isset($_SESSION['user_id'])) respond(false, 'Your session has expired. Please log in again.');
 }
-// Secretariat OR Commission On Youth officers (accounts with a position)
-function requireEventMarker($pdo) {
+// Secretariat, Commission On Youth officers, or the leader of THIS event (until it is done)
+function requireEventMarker($pdo, $event_id = 0) {
     requireLogin();
-    if (!isCoyOfficer($pdo)) respond(false, 'Only the Secretariat or Commission On Youth officers can mark special events.');
+    if (isCoyOfficer($pdo)) return;
+    $st = $event_id ? pymEventLeaderState($pdo, $event_id) : 'no';
+    if ($st === 'open') return;
+    if ($st === 'done') respond(false, 'This event is already done. Only the Secretariat can change its attendance now.');
+    respond(false, 'Only the Secretariat, Commission On Youth officers or the leaders of this event can mark it.');
 }
 // null = secretariat, -1 = leader without slot, otherwise slot id
 function leaderSlotId($pdo) { return pymLeaderSlot($pdo); }
@@ -69,13 +74,11 @@ switch ($action) {
         $hist = pymSlotHistory($pdo);
         $LSM = pymLeaderSlotMap($pdo);
 
-        // Existing records of this session
         $rec = [];
         $rs = $pdo->prepare("SELECT member_id, status, time_in, reason FROM attendance WHERE slot_id = ? AND att_date = ?");
         $rs->execute([$slot_id, $date]);
         foreach ($rs->fetchAll() as $r) $rec[(int)$r['member_id']] = $r;
 
-        // Present in another slot the same day
         $el = [];
         $q = $pdo->prepare("SELECT a.member_id, g.name FROM attendance a JOIN groups_slots g ON g.id = a.slot_id WHERE a.att_date = ? AND a.slot_id <> ? AND a.status = 'present'");
         $q->execute([$date, $slot_id]);
@@ -86,7 +89,6 @@ switch ($action) {
         foreach ($ys as $m) {
             $mid = (int)$m['id'];
             $a = $rec[$mid] ?? null;
-            // Roster = members who belonged to this slot ON THAT DATE (old attendance stays with the old slot)
             $home = (int)pymSlotOn($hist, $m, $date) === $slot_id || (($LSM[$mid] ?? 0) === $slot_id);
             if ($home && ($m['status'] === 'active' || $a)) {
                 $out[] = ['member_id' => $mid, 'full_name' => $m['full_name'], 'slot_name' => $slot['name'],
@@ -163,7 +165,7 @@ switch ($action) {
             $id = nextId($pdo, 'attendance');
             $del = $pdo->prepare("DELETE FROM attendance WHERE member_id = ? AND slot_id = ? AND att_date = ?");
             foreach ($clean as [$mid, $status, $time, $reason]) {
-                if ($status === 'absent') $del->execute([$mid, $slot_id, $date]);   // absent = no row
+                if ($status === 'absent') $del->execute([$mid, $slot_id, $date]);
                 else $ins->execute([$id++, $mid, $slot_id, $date, $status, $time, $reason]);
             }
             $pdo->commit();
@@ -173,7 +175,6 @@ switch ($action) {
             respond(false, 'Failed to save attendance: ' . $e->getMessage());
         }
 
-        // Mark this session as submitted (so "not submitted" alerts and follow-ups are accurate)
         try {
             $ex = $pdo->prepare("SELECT id FROM attendance_submissions WHERE slot_id = ? AND att_date = ?");
             $ex->execute([$slot_id, $date]);
@@ -192,8 +193,8 @@ switch ($action) {
     }
 
     case 'get_event_att': {
-        requireEventMarker($pdo);
         $event_id = (int)($input['event_id'] ?? 0);
+        requireEventMarker($pdo, $event_id);
         $s = $pdo->prepare("SELECT id FROM events WHERE id = ? AND category_id IS NOT NULL");
         $s->execute([$event_id]);
         if (!$s->fetch()) respond(false, 'Invalid event.');
@@ -211,8 +212,8 @@ switch ($action) {
     }
 
     case 'save_event_att': {
-        requireEventMarker($pdo);
         $event_id = (int)($input['event_id'] ?? 0);
+        requireEventMarker($pdo, $event_id);
         $records  = $input['records'] ?? [];
         if (!is_array($records)) $records = [];
         $s = $pdo->prepare("SELECT id FROM events WHERE id = ? AND category_id IS NOT NULL");
