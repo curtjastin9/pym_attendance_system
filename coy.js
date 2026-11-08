@@ -186,6 +186,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     tableWrap.parentNode.insertBefore(tools, tableWrap);
     sb.style.margin = '0';
     tools.appendChild(sb);
+    const sl = document.createElement('select');
+    sl.id = 'youthSlotFilter';
+    sl.setAttribute('aria-label', 'Filter by time slot');
+    sl.style.cssText = 'padding:9px 32px 9px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background-color:var(--surface);outline:none;max-width:100%';
+    sl.innerHTML = '<option value="">All time slots</option>';
+    tools.appendChild(sl);
+    sl.addEventListener('change', applyYouthFilter);
     const sf = document.createElement('select');
     sf.id = 'youthScholarFilter';
     sf.setAttribute('aria-label', 'Filter by scholar category');
@@ -462,7 +469,7 @@ async function loadYouth() {
 
   const sec = isSecretariatUser();
   tbody.innerHTML = res.data.map(m => `
-    <tr data-scholar="${escapeHtml(m.scholar_type || 'none')}">
+    <tr data-scholar="${escapeHtml(m.scholar_type || 'none')}" data-slot="${escapeHtml(m.slot_name || '')}">
       <td>${escapeHtml(m.full_name)}</td>
       <td>${m.slot_name ? `<span class="slot-dot" style="display:inline-block;background:${escapeHtml(m.slot_color)}"></span> ${escapeHtml(m.slot_name)}` : '<span style="color:var(--text-light)">— None —</span>'}</td>
       <td>${scholarBadge(m.scholar_type)}</td>
@@ -475,6 +482,13 @@ async function loadYouth() {
     </tr>
   `).join('');
 
+  const slSel = document.getElementById('youthSlotFilter');
+  if (slSel) {
+    const keep = slSel.value;
+    const names = Array.from(new Set(res.data.map(m => m.slot_name).filter(Boolean))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    slSel.innerHTML = '<option value="">All time slots</option>' + names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('') + '<option value="__none">— None —</option>';
+    slSel.value = Array.from(slSel.options).some(o => o.value === keep) ? keep : '';
+  }
   tbody.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', () => editYouth(btn.dataset.id, res.data)));
   tbody.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', () => deleteYouth(btn.dataset.id)));
   applyYouthFilter();
@@ -517,12 +531,15 @@ function applyYouthFilter() {
   const q = inp.value.trim().toLowerCase();
   const sfEl = document.getElementById('youthScholarFilter');
   const sk = sfEl ? sfEl.value : '';
+  const slEl = document.getElementById('youthSlotFilter');
+  const slv = slEl ? slEl.value : '';
   const tbody = document.getElementById('youthTableBody');
   tbody.querySelectorAll('.no-match-row').forEach(r => r.remove());
   const rows = Array.from(tbody.querySelectorAll('tr')).filter(r => r.querySelector('.edit-btn, .delete-btn'));
   let shown = 0;
   rows.forEach(r => {
-    const ok = (!q || r.textContent.toLowerCase().includes(q)) && (!sk || r.dataset.scholar === sk);
+    const ok = (!q || r.textContent.toLowerCase().includes(q)) && (!sk || r.dataset.scholar === sk)
+      && (!slv || (slv === '__none' ? !r.dataset.slot : r.dataset.slot === slv));
     r.style.display = ok ? '' : 'none';
     if (ok) shown++;
   });
