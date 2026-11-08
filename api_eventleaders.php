@@ -19,9 +19,9 @@ ensureEventLeaderSchema($pdo);
 
 switch ($action) {
 
-    // Accounts that can be picked as event leaders (secretariat is never limited, so it is not listed)
+    // Accounts that can be picked as event leaders (admin/secretariat first, then slot leaders)
     case 'users': {
-        respond(true, '', $pdo->query("SELECT id, full_name, role FROM users WHERE status = 'approved' AND role <> 'secretariat' ORDER BY full_name ASC")->fetchAll());
+        respond(true, '', $pdo->query("SELECT id, full_name, role FROM users WHERE status = 'approved' ORDER BY (role = 'secretariat') DESC, full_name ASC")->fetchAll());
     }
 
     // Leaders of one event: account ids + youth ids
