@@ -461,6 +461,21 @@ async function openYouthPicker() {
 }
 
 /* Slot leaders are labelled "Slot Leader · <slot>" in the list; for filtering they belong to that same slot. */
+/* Order slots by day (Mon..Sat, Sunday last) then by time of day, e.g. Saturday 6:00 PM, Sunday 7:00 AM ... Sunday 7:00 PM */
+function slotKey(n) {
+  const m = String(n).match(/(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!m) return null;
+  const day = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].indexOf(m[1].toLowerCase());
+  let h = (+m[2]) % 12 + (m[4].toUpperCase() === 'PM' ? 12 : 0);
+  return day * 1440 + h * 60 + (+m[3]);
+}
+function slotCmp(a, b) {
+  const x = slotKey(a), y = slotKey(b);
+  if (x === null && y === null) return a.localeCompare(b, undefined, { numeric: true });
+  if (x === null) return 1;
+  if (y === null) return -1;
+  return x - y;
+}
 function realSlotName(n) { return String(n || '').replace(/^Slot Leader\s*·\s*/, ''); }
 
 async function loadYouth() {
@@ -488,7 +503,7 @@ async function loadYouth() {
   const slSel = document.getElementById('youthSlotFilter');
   if (slSel) {
     const keep = slSel.value;
-    const names = Array.from(new Set(res.data.map(m => realSlotName(m.slot_name)).filter(Boolean))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const names = Array.from(new Set(res.data.map(m => realSlotName(m.slot_name)).filter(Boolean))).sort(slotCmp);
     slSel.innerHTML = '<option value="">All time slots</option>' + names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('') + '<option value="__none">— None —</option>';
     slSel.value = Array.from(slSel.options).some(o => o.value === keep) ? keep : '';
   }
