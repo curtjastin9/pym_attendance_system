@@ -12,6 +12,7 @@ $input = json_decode($rawInput, true);
 if (!is_array($input)) $input = [];
 
 require_once 'security.php';
+require_once 'eventleaders_lib.php';
 ensureSecuritySchema($pdo);
 ensureExtraSchema($pdo);
 ensureEventServerSchema($pdo);
@@ -418,6 +419,7 @@ switch ($action) {
         $en = $pdo->prepare("SELECT title, event_date FROM events WHERE id=?"); $en->execute([$id]); $evr = $en->fetch();
         $pdo->prepare("DELETE FROM event_attendance WHERE event_id=?")->execute([$id]);
         try { $pdo->prepare("DELETE FROM event_servers WHERE event_id=?")->execute([$id]); } catch (Throwable $e) {}
+        try { ensureEventLeaderSchema($pdo); $pdo->prepare("DELETE FROM event_leader_users WHERE event_id=?")->execute([$id]); $pdo->prepare("DELETE FROM event_leader_youth WHERE event_id=?")->execute([$id]); } catch (Throwable $e) {}
         $stmt = $pdo->prepare("DELETE FROM events WHERE id=?");
         $stmt->execute([$id]);
         logActivity($pdo, 'delete_event', $evr ? $evr['title'] . ' · ' . $evr['event_date'] : 'Event #' . $id, 'Event and its attendance deleted');
@@ -635,6 +637,24 @@ switch ($action) {
                     $catByDate[$ce['event_date']][] = ['id'=>$ce['id'],'kind'=>'event','title'=>$ce['title'],'time'=>$ce['event_time'],'color'=>'#D97706','category'=>$ce['category'],'location'=>$ce['location'],'present'=>(int)$ce['present'],'total'=>$totalActive];
                 }
             } catch (Throwable $e) { error_log('cal events: ' . $e->getMessage()); }
+        } else {
+            // A leader: also show the events they lead, only while those events are not done yet
+            try {
+                $mine = pymMyOpenEventIds($pdo);
+                if ($mine) {
+                    $from = date('Y-m-d', $firstDay); $to = date('Y-m-t', $firstDay);
+                    $ph = implode(',', array_fill(0, count($mine), '?'));
+                    $st = $pdo->prepare("SELECT e.id, e.title, e.event_date, e.event_time, e.location, c.name AS category,
+                        (SELECT COUNT(*) FROM event_attendance a WHERE a.event_id = e.id AND a.status='present') AS present
+                        FROM events e JOIN event_categories c ON c.id = e.category_id
+                        WHERE e.category_id IS NOT NULL AND e.id IN ($ph) AND e.event_date BETWEEN ? AND ? ORDER BY e.event_time ASC");
+                    $st->execute(array_merge($mine, [$from, $to]));
+                    $totalActive = (int)$pdo->query("SELECT COUNT(*) FROM youth_members WHERE status='active'")->fetchColumn();
+                    foreach ($st->fetchAll() as $ce) {
+                        $catByDate[$ce['event_date']][] = ['id'=>$ce['id'],'kind'=>'event','title'=>$ce['title'],'time'=>$ce['event_time'],'color'=>'#D97706','category'=>$ce['category'],'location'=>$ce['location'],'present'=>(int)$ce['present'],'total'=>$totalActive];
+                    }
+                }
+            } catch (Throwable $e) { error_log('cal leader events: ' . $e->getMessage()); }
         }
 
         $calendar = [];
@@ -1077,6 +1097,9 @@ switch ($action) {
         $sids = $input['server_ids'] ?? [];
         if (!is_array($sids) || !$has) $sids = [];
         $sids = array_values(array_unique(array_filter(array_map('intval', $sids), fn($v) => $v > 0)));
+        // event leaders (only touched when the client sends them)
+        $setLeaders = array_key_exists('leader_user_ids', $input) || array_key_exists('leader_youth_ids', $input);
+        ensureEventLeaderSchema($pdo); // creates tables, must run before the transaction
         try {
             $pdo->beginTransaction();
             if ($id) {
@@ -1098,6 +1121,7 @@ switch ($action) {
                 $ins = $pdo->prepare("INSERT INTO event_servers (id, event_id, member_id) VALUES (?,?,?)");
                 foreach ($valid as $m) $ins->execute([$nid++, $eid, $m]);
             }
+            if ($setLeaders) pymSaveEventLeaders($pdo, $eid, $input['leader_user_ids'] ?? [], $input['leader_youth_ids'] ?? []);
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
