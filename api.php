@@ -369,7 +369,7 @@ switch ($action) {
         if (!$snap) respond(false, 'Member not found.');
         $lk = $pdo->prepare("SELECT id FROM users WHERE LOWER(TRIM(full_name)) = ? LIMIT 1");
         $lk->execute([strtolower(trim($snap['member']['full_name']))]);
-        if ($lk->fetch()) respond(false, 'This member is linked to a user account. Delete the user in Users & Roles instead.');
+        if ($lk->fetch()) respond(false, 'This member is linked to a user account (Admin / Slot Leader) and cannot be deleted here.');
         try {
             $pdo->beginTransaction();
             trashSave($pdo, 'youth', $snap['member']['full_name'], $snap);
@@ -934,6 +934,21 @@ switch ($action) {
         $stmt->execute([$id]);
         $u = $stmt->fetch();
         if (!$u) respond(false, 'User not found.');
+
+        // PROTECTED ACCOUNTS: Admin (Secretariat) and Slot Leaders can never be deleted
+        if ($u['role'] === 'secretariat') {
+            respond(false, 'Admin (Secretariat) accounts cannot be deleted.');
+        }
+        $isSlotLeader = !empty($u['slot_id']);
+        if (!$isSlotLeader) {
+            $slq = $pdo->prepare("SELECT 1 FROM slot_leaders WHERE user_id=? LIMIT 1");
+            $slq->execute([$id]);
+            $isSlotLeader = (bool)$slq->fetch();
+        }
+        if ($isSlotLeader) {
+            respond(false, 'Slot Leaders cannot be deleted. Remove them from their slot first if you really need to delete this account.');
+        }
+
         ensureTrash($pdo);
         $m = $pdo->prepare("SELECT id FROM youth_members WHERE LOWER(TRIM(full_name)) = ?");
         $m->execute([strtolower(trim($u['full_name']))]);
