@@ -116,3 +116,130 @@
     show(cur); loadEvents(true); loadAdminCategories();
   }, 0));
 })();
+
+/* ---------- Event Categories: BULK DELETE (button left of the trash button, Secretariat only) ---------- */
+(function () {
+  const box = document.getElementById('categoriesList');
+  if (!box || typeof loadAdminCategories !== 'function') return;
+
+  const st = document.createElement('style');
+  st.textContent = `.bk-btn:hover{background:var(--crimson)!important;color:#fff!important;border-color:var(--crimson)!important}
+  .bk-btn.on{background:var(--crimson-pale)!important;color:var(--crimson)!important;border-color:var(--crimson)!important}
+  .bk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:var(--radius-sm);padding:10px 14px;margin:0 0 10px}
+  .bk-bar .bk-count{font-size:13px;font-weight:800;color:#991B1B;flex:1;min-width:140px}
+  .bk-bar button{border:none;border-radius:8px;padding:9px 14px;font-size:12.5px;font-weight:700;min-height:38px}
+  .bk-bar .bk-del{background:var(--crimson);color:#fff}
+  .bk-bar .bk-del:disabled{opacity:.45;cursor:not-allowed}
+  .bk-bar .bk-cancel{background:#fff;color:var(--text-mid);border:1.5px solid var(--border)}
+  .bk-th,.bk-td{width:44px}
+  .bk-th input,.bk-td input{width:18px;height:18px;accent-color:var(--crimson);cursor:pointer}
+  tr.bk-sel td{background:#FEF2F2!important}`;
+  document.head.appendChild(st);
+
+  const SEL = {}; // categoryId -> Set of selected event ids (key present = bulk mode is on for that category)
+
+  function evId(row) { const b = row.querySelector('.cat-ev-edit'); return b ? String(b.dataset.id) : null; }
+
+  function refreshBar(block) {
+    const cid = block.dataset.cid, set = SEL[cid];
+    if (!set) return;
+    const cbs = block.querySelectorAll('.bk-cb');
+    const n = set.size;
+    const cnt = block.querySelector('.bk-count'), del = block.querySelector('.bk-del'), all = block.querySelector('.bk-all');
+    if (cnt) cnt.textContent = n ? n + ' of ' + cbs.length + ' event(s) selected' : 'Tick the events you want to delete';
+    if (del) { del.disabled = !n; del.innerHTML = '<i class="fas fa-trash"></i> Delete selected' + (n ? ' (' + n + ')' : ''); }
+    if (all) { all.checked = n > 0 && n === cbs.length; all.indeterminate = n > 0 && n < cbs.length; }
+  }
+
+  function decorate() {
+    box.querySelectorAll('.cat-block').forEach(block => {
+      const del = block.querySelector('.cat-delete');
+      if (!del) return; // the Default (Normal Serve) category has no events to bulk delete
+      const cid = String(del.dataset.id);
+      const table = block.querySelector('table.data-table');
+      const rows = table ? Array.from(table.querySelectorAll('tbody tr')).filter(r => evId(r)) : [];
+      if (!rows.length) { delete SEL[cid]; return; }
+      block.dataset.cid = cid;
+
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'table-btn delete-btn bk-btn' + (SEL[cid] ? ' on' : '');
+      b.dataset.bulk = cid;
+      b.title = 'Bulk delete events';
+      b.setAttribute('aria-label', 'Bulk delete events');
+      b.innerHTML = '<i class="fas fa-list-check"></i>';
+      del.before(b);
+
+      if (!SEL[cid]) return;
+      const present = new Set(rows.map(evId));
+      SEL[cid] = new Set(Array.from(SEL[cid]).filter(x => present.has(x)));
+
+      table.querySelector('thead tr').insertAdjacentHTML('afterbegin', '<th class="bk-th"><input type="checkbox" class="bk-all" aria-label="Select all events"/></th>');
+      rows.forEach(r => {
+        const id = evId(r), on = SEL[cid].has(id);
+        r.insertAdjacentHTML('afterbegin', '<td class="bk-td"><input type="checkbox" class="bk-cb" value="' + id + '"' + (on ? ' checked' : '') + ' aria-label="Select event"/></td>');
+        r.classList.toggle('bk-sel', on);
+      });
+      const bar = document.createElement('div');
+      bar.className = 'bk-bar';
+      bar.innerHTML = '<span class="bk-count"></span><button type="button" class="bk-del" disabled><i class="fas fa-trash"></i> Delete selected</button><button type="button" class="bk-cancel">Cancel</button>';
+      table.closest('.table-wrap').before(bar);
+      refreshBar(block);
+    });
+  }
+
+  const _lac = loadAdminCategories;
+  loadAdminCategories = async function () { await _lac.apply(this, arguments); try { decorate(); } catch (e) { console.error(e); } };
+
+  async function bulkApi(ids) {
+    try {
+      const r = await fetch('api_bulkdelete.php?action=bulk_delete_events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      return await r.json();
+    } catch (e) { return { success: false, message: 'Network error. Please check your connection.' }; }
+  }
+
+  box.addEventListener('click', async e => {
+    const tog = e.target.closest('[data-bulk]');
+    if (tog) {
+      const cid = String(tog.dataset.bulk);
+      if (SEL[cid]) delete SEL[cid]; else SEL[cid] = new Set();
+      loadAdminCategories();
+      return;
+    }
+    const block = e.target.closest('.cat-block');
+    if (!block) return;
+    const cid = block.dataset.cid;
+    if (e.target.closest('.bk-cancel')) { delete SEL[cid]; loadAdminCategories(); return; }
+    const del = e.target.closest('.bk-del');
+    if (del && SEL[cid] && SEL[cid].size) {
+      const ids = Array.from(SEL[cid]);
+      if (!confirm('Delete ' + ids.length + ' selected event(s)?\n\nTheir attendance records, servers and leaders will also be permanently deleted. This cannot be undone.')) return;
+      del.disabled = true;
+      const res = await bulkApi(ids);
+      alert(res.message);
+      if (res.success) delete SEL[cid];
+      try { await loadAdminCategories(); } catch (_) {}
+      try { if (typeof loadEvents === 'function') loadEvents(true); } catch (_) {}
+      try { if (typeof loadDashboardStats === 'function') loadDashboardStats(); } catch (_) {}
+    }
+  });
+
+  box.addEventListener('change', e => {
+    const block = e.target.closest('.cat-block');
+    if (!block) return;
+    const cid = block.dataset.cid, set = SEL[cid];
+    if (!set) return;
+    if (e.target.classList.contains('bk-all')) {
+      block.querySelectorAll('.bk-cb').forEach(cb => {
+        cb.checked = e.target.checked;
+        cb.closest('tr').classList.toggle('bk-sel', cb.checked);
+        if (cb.checked) set.add(cb.value); else set.delete(cb.value);
+      });
+      refreshBar(block);
+    } else if (e.target.classList.contains('bk-cb')) {
+      if (e.target.checked) set.add(e.target.value); else set.delete(e.target.value);
+      e.target.closest('tr').classList.toggle('bk-sel', e.target.checked);
+      refreshBar(block);
+    }
+  });
+})();
