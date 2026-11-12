@@ -57,6 +57,14 @@ function purgeYouth($pdo, $ids) {
 
 switch ($action) {
 
+    // Youth members that belong to a user account (Slot Leader or Admin/Secretariat, matched by full name).
+    // The Youth Members page hides their bulk-select checkbox; they are deleted in Users & Roles instead.
+    case 'locked_ids': {
+        $rows = $pdo->query("SELECT DISTINCT y.id FROM youth_members y
+            JOIN users u ON LOWER(TRIM(u.full_name)) = LOWER(TRIM(y.full_name))")->fetchAll(PDO::FETCH_COLUMN);
+        respond(true, '', array_map('intval', $rows));
+    }
+
     // Moves many youth members (with ALL their attendance data) to the Recycle Bin, then removes them.
     case 'bulk_delete_youth': {
         $ids = $input['ids'] ?? [];
@@ -98,11 +106,11 @@ switch ($action) {
         }
 
         if (!$done) {
-            $why = $linked ? 'The selected member(s) are linked to a user account. Delete them in Users & Roles instead.' : ($failed ? 'Failed to delete the selected members.' : 'The selected members were not found.');
+            $why = $linked ? 'Leaders and admins cannot be bulk deleted. Delete them in Users & Roles instead.' : ($failed ? 'Failed to delete the selected members.' : 'The selected members were not found.');
             respond(false, $why);
         }
         $msg = count($done) . ' member(s) moved to the Recycle Bin (can be restored for 30 days).';
-        if ($linked) $msg .= ' Skipped ' . count($linked) . ' linked to a user account (delete them in Users & Roles): ' . implode(', ', array_slice($linked, 0, 5)) . (count($linked) > 5 ? '…' : '') . '.';
+        if ($linked) $msg .= ' Skipped ' . count($linked) . ' leader/admin account(s) (delete them in Users & Roles): ' . implode(', ', array_slice($linked, 0, 5)) . (count($linked) > 5 ? '…' : '') . '.';
         if ($failed) $msg .= ' ' . $failed . ' failed.';
         respond(true, $msg, ['deleted' => count($done), 'skipped_linked' => count($linked), 'failed' => $failed]);
     }
