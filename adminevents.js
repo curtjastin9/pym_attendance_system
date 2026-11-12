@@ -243,3 +243,140 @@
     }
   });
 })();
+
+/* ---------- Youth Members: BULK DELETE → Recycle Bin (Secretariat only) ---------- */
+(function () {
+  const st = document.createElement('style');
+  st.textContent = `.yb-toggle{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--border);background:var(--surface);color:var(--text-mid);font-size:13px;font-weight:700;padding:9px 14px;border-radius:var(--radius-sm)}
+  .yb-toggle:hover,.yb-toggle.on{background:var(--crimson-pale);color:var(--crimson);border-color:var(--crimson)}
+  .yb-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:var(--radius-sm);padding:10px 14px;margin:0 0 12px}
+  .yb-bar .yb-count{font-size:13px;font-weight:800;color:#991B1B;flex:1;min-width:160px}
+  .yb-bar label{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:#991B1B;cursor:pointer}
+  .yb-bar button{border:none;border-radius:8px;padding:9px 14px;font-size:12.5px;font-weight:700;min-height:38px}
+  .yb-bar .yb-del{background:var(--crimson);color:#fff}
+  .yb-bar .yb-del:disabled{opacity:.45;cursor:not-allowed}
+  .yb-bar .yb-cancel{background:#fff;color:var(--text-mid);border:1.5px solid var(--border)}
+  .yb-cb{width:18px;height:18px;accent-color:var(--crimson);cursor:pointer;margin-right:10px;vertical-align:middle;flex:none}
+  .yb-bar input{width:18px;height:18px;accent-color:var(--crimson)}
+  tr.yb-sel td{background:#FEF2F2!important}`;
+  document.head.appendChild(st);
+
+  let ON = false;
+  const SEL = new Set();
+  const $ = id => document.getElementById(id);
+
+  function visibleRows() {
+    return Array.from(document.querySelectorAll('#youthTableBody tr')).filter(r => r.querySelector('.yb-cb') && r.style.display !== 'none');
+  }
+  function refreshBar() {
+    const bar = $('ybBar');
+    if (!bar) return;
+    const vis = visibleRows();
+    const vSel = vis.filter(r => SEL.has(r.querySelector('.yb-cb').value)).length;
+    bar.querySelector('.yb-count').textContent = SEL.size ? SEL.size + ' member(s) selected' : 'Tick the members you want to delete';
+    const del = bar.querySelector('.yb-del');
+    del.disabled = !SEL.size;
+    del.innerHTML = '<i class="fas fa-trash"></i> Delete selected' + (SEL.size ? ' (' + SEL.size + ')' : '');
+    const all = bar.querySelector('.yb-all');
+    all.checked = vis.length > 0 && vSel === vis.length;
+    all.indeterminate = vSel > 0 && vSel < vis.length;
+  }
+  function removeBar() { const b = $('ybBar'); if (b) b.remove(); }
+
+  function decorate() {
+    const btn = $('ybToggle');
+    if (btn) btn.classList.toggle('on', ON);
+    removeBar();
+    if (!ON) return;
+    const tb = $('youthTableBody');
+    if (!tb) return;
+    const present = new Set();
+    Array.from(tb.querySelectorAll('tr')).forEach(r => {
+      const d = r.querySelector('.delete-btn[data-id]');
+      if (!d) return;
+      const id = String(d.dataset.id);
+      present.add(id);
+      const td = r.cells[0];
+      if (td.querySelector('.yb-cb')) return;
+      td.insertAdjacentHTML('afterbegin', '<input type="checkbox" class="yb-cb" value="' + id + '"' + (SEL.has(id) ? ' checked' : '') + ' aria-label="Select member"/>');
+      r.classList.toggle('yb-sel', SEL.has(id));
+    });
+    Array.from(SEL).forEach(id => { if (!present.has(id)) SEL.delete(id); });
+    const bar = document.createElement('div');
+    bar.id = 'ybBar';
+    bar.className = 'yb-bar';
+    bar.innerHTML = '<label><input type="checkbox" class="yb-all"/> Select all shown</label><span class="yb-count"></span><button type="button" class="yb-del" disabled><i class="fas fa-trash"></i> Delete selected</button><button type="button" class="yb-cancel">Cancel</button>';
+    tb.closest('.table-wrap').before(bar);
+    refreshBar();
+  }
+
+  async function bulkApi(ids) {
+    try {
+      const r = await fetch('api_bulkyouth.php?action=bulk_delete_youth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      return await r.json();
+    } catch (e) { return { success: false, message: 'Network error. Please check your connection.' }; }
+  }
+
+  function stop() { ON = false; SEL.clear(); }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (typeof apiCall !== 'function' || typeof loadYouth !== 'function') return;
+    const s = await apiCall('check_session');
+    if (!(s.success && s.data.role === 'secretariat')) return;
+    const slot = $('youthSlotFilter');
+    const tools = slot ? slot.parentElement : null;
+    if (!tools) return;
+
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.id = 'ybToggle'; btn.className = 'yb-toggle';
+    btn.title = 'Bulk delete members (goes to the Recycle Bin)';
+    btn.innerHTML = '<i class="fas fa-list-check"></i> Bulk delete';
+    tools.appendChild(btn);
+    btn.addEventListener('click', () => { if (ON) stop(); else { ON = true; SEL.clear(); } loadYouth(); });
+
+    const _ly = loadYouth;
+    loadYouth = async function () { await _ly.apply(this, arguments); try { decorate(); } catch (e) { console.error(e); } };
+
+    // Search / filters hide rows: keep the counter and "select all" correct
+    ['youthSearch', 'youthSlotFilter', 'youthScholarFilter'].forEach(id => {
+      const el = $(id);
+      if (el) el.addEventListener(id === 'youthSearch' ? 'input' : 'change', () => setTimeout(refreshBar, 0));
+    });
+
+    const tb = $('youthTableBody');
+    tb.addEventListener('change', e => {
+      const c = e.target.closest('.yb-cb');
+      if (!c) return;
+      if (c.checked) SEL.add(c.value); else SEL.delete(c.value);
+      c.closest('tr').classList.toggle('yb-sel', c.checked);
+      refreshBar();
+    });
+
+    const page = $('page-youth');
+    page.addEventListener('change', e => {
+      if (!e.target.classList.contains('yb-all')) return;
+      visibleRows().forEach(r => {
+        const cb = r.querySelector('.yb-cb');
+        cb.checked = e.target.checked;
+        r.classList.toggle('yb-sel', cb.checked);
+        if (cb.checked) SEL.add(cb.value); else SEL.delete(cb.value);
+      });
+      refreshBar();
+    });
+    page.addEventListener('click', async e => {
+      if (e.target.closest('.yb-cancel')) { stop(); loadYouth(); return; }
+      const del = e.target.closest('.yb-del');
+      if (!del || !SEL.size) return;
+      const ids = Array.from(SEL);
+      const t = prompt('This moves ' + ids.length + ' member(s) and ALL their attendance to the Recycle Bin (restorable for 30 days).\n\nType DELETE to confirm:');
+      if (t === null) return;
+      if (t.trim().toUpperCase() !== 'DELETE') { alert('Not confirmed. Nothing was deleted.'); return; }
+      del.disabled = true;
+      const res = await bulkApi(ids);
+      alert(res.message);
+      if (res.success) stop();
+      try { await loadYouth(); } catch (_) {}
+      try { if (typeof loadDashboardStats === 'function') loadDashboardStats(); } catch (_) {}
+    });
+  });
+})();
