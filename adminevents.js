@@ -262,8 +262,62 @@
   .yb-cb{width:18px;height:18px;accent-color:var(--crimson);cursor:pointer;margin-right:10px;vertical-align:middle;flex:none}
   .yb-lock{display:inline-block;width:18px;margin-right:10px;text-align:center;font-size:12px;color:var(--text-faint);vertical-align:middle;cursor:help}
   .yb-bar input{width:18px;height:18px;accent-color:var(--crimson)}
-  tr.yb-sel td{background:#FEF2F2!important}`;
+  tr.yb-sel td{background:#FEF2F2!important}
+  .yd-back{position:fixed;inset:0;z-index:10000;background:rgba(8,16,31,.6);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px}
+  .yd-box{background:#fff;border-radius:18px;width:100%;max-width:460px;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.4);border-top:4px solid var(--crimson);max-height:92vh;max-height:92dvh;overflow:auto}
+  .yd-ic{width:48px;height:48px;border-radius:14px;background:var(--crimson-pale);color:var(--crimson);display:grid;place-items:center;font-size:20px;margin-bottom:12px}
+  .yd-box h4{font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:800;margin-bottom:6px;color:var(--text-primary)}
+  .yd-box p{font-size:13px;color:var(--text-soft);line-height:1.55;margin-bottom:12px}
+  .yd-box p b{color:var(--text-primary)}
+  .yd-names{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .yd-names span{background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:99px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .yd-box label{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text-soft);margin-bottom:6px}
+  .yd-box label b{color:var(--crimson)}
+  .yd-box input{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:12px 13px;font-size:16px;font-weight:700;letter-spacing:2px;outline:none;text-transform:uppercase;min-height:48px}
+  .yd-box input:focus{border-color:var(--crimson);box-shadow:0 0 0 3px rgba(220,38,38,.12)}
+  .yd-box input.ok{border-color:var(--emerald);box-shadow:0 0 0 3px rgba(5,150,105,.12)}
+  .yd-act{display:flex;gap:10px;margin-top:16px}
+  .yd-act button{flex:1;min-height:48px;border-radius:10px;font-size:14px;font-weight:700;border:1.5px solid var(--border);background:#fff;color:var(--text-mid)}
+  .yd-act button.go{background:var(--crimson);border-color:var(--crimson);color:#fff}
+  .yd-act button:disabled{opacity:.45;cursor:not-allowed}
+  @media (max-width:640px){
+    .yd-back{align-items:flex-end;padding:0}
+    .yd-box{max-width:none;border-radius:24px 24px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:ydUp .26s cubic-bezier(.2,.8,.2,1)}
+    @keyframes ydUp{from{transform:translateY(46px);opacity:0}to{transform:none;opacity:1}}
+  }`;
   document.head.appendChild(st);
+
+  /* In-page confirmation window (replaces the browser's prompt box). Resolves true only when DELETE is typed. */
+  function askDelete(count, names) {
+    return new Promise(resolve => {
+      const back = document.createElement('div');
+      back.className = 'yd-back';
+      const shown = names.slice(0, 6).map(n => '<span>' + escapeHtml(n) + '</span>').join('');
+      const more = names.length > 6 ? '<span>+' + (names.length - 6) + ' more</span>' : '';
+      back.innerHTML = '<div class="yd-box" role="dialog" aria-modal="true" aria-label="Confirm bulk delete">' +
+        '<div class="yd-ic"><i class="fas fa-trash-can"></i></div>' +
+        '<h4>Delete ' + count + ' member(s)?</h4>' +
+        '<p>They and <b>all their attendance</b> will be moved to the <b>Recycle Bin</b>. You can restore them within 30 days.</p>' +
+        '<div class="yd-names">' + shown + more + '</div>' +
+        '<label>Type <b>DELETE</b> to confirm</label>' +
+        '<input type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="DELETE"/>' +
+        '<div class="yd-act"><button type="button" class="cancel">Cancel</button><button type="button" class="go" disabled><i class="fas fa-trash"></i> Delete</button></div></div>';
+      document.body.appendChild(back);
+      const inp = back.querySelector('input'), go = back.querySelector('.go');
+      setTimeout(() => inp.focus(), 60);
+      const valid = () => inp.value.trim().toUpperCase() === 'DELETE';
+      const done = v => { document.removeEventListener('keydown', onKey, true); back.remove(); resolve(v); };
+      const onKey = e => {
+        if (e.key === 'Escape') { e.preventDefault(); done(false); }
+        else if (e.key === 'Enter' && valid()) { e.preventDefault(); done(true); }
+      };
+      document.addEventListener('keydown', onKey, true);
+      inp.addEventListener('input', () => { const v = valid(); go.disabled = !v; inp.classList.toggle('ok', v); });
+      go.addEventListener('click', () => { if (valid()) done(true); });
+      back.querySelector('.cancel').addEventListener('click', () => done(false));
+      back.addEventListener('mousedown', e => { if (e.target === back) done(false); });
+    });
+  }
 
   let ON = false;
   const SEL = new Set();
@@ -393,9 +447,11 @@
       if (!del || !SEL.size) return;
       const ids = Array.from(SEL).filter(id => !LOCKED.has(String(id)));
       if (!ids.length) return;
-      const t = prompt('This moves ' + ids.length + ' member(s) and ALL their attendance to the Recycle Bin (restorable for 30 days).\n\nType DELETE to confirm:');
-      if (t === null) return;
-      if (t.trim().toUpperCase() !== 'DELETE') { alert('Not confirmed. Nothing was deleted.'); return; }
+      const names = Array.from(document.querySelectorAll('#youthTableBody tr'))
+        .filter(r => { const c = r.querySelector('.yb-cb'); return c && SEL.has(c.value); })
+        .map(r => r.cells[0].textContent.trim());
+      const ok = await askDelete(ids.length, names);
+      if (!ok) return;
       del.disabled = true;
       const res = await bulkApi(ids);
       alert(res.message);
