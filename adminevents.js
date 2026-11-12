@@ -263,58 +263,178 @@
   .yb-lock{display:inline-block;width:18px;margin-right:10px;text-align:center;font-size:12px;color:var(--text-faint);vertical-align:middle;cursor:help}
   .yb-bar input{width:18px;height:18px;accent-color:var(--crimson)}
   tr.yb-sel td{background:#FEF2F2!important}
-  .yd-back{position:fixed;inset:0;z-index:10000;background:rgba(8,16,31,.6);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px}
-  .yd-box{background:#fff;border-radius:18px;width:100%;max-width:460px;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.4);border-top:4px solid var(--crimson);max-height:92vh;max-height:92dvh;overflow:auto}
-  .yd-ic{width:48px;height:48px;border-radius:14px;background:var(--crimson-pale);color:var(--crimson);display:grid;place-items:center;font-size:20px;margin-bottom:12px}
-  .yd-box h4{font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:800;margin-bottom:6px;color:var(--text-primary)}
-  .yd-box p{font-size:13px;color:var(--text-soft);line-height:1.55;margin-bottom:12px}
-  .yd-box p b{color:var(--text-primary)}
-  .yd-names{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
-  .yd-names span{background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:99px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .yd-box label{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text-soft);margin-bottom:6px}
-  .yd-box label b{color:var(--crimson)}
-  .yd-box input{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:12px 13px;font-size:16px;font-weight:700;letter-spacing:2px;outline:none;text-transform:uppercase;min-height:48px}
-  .yd-box input:focus{border-color:var(--crimson);box-shadow:0 0 0 3px rgba(220,38,38,.12)}
-  .yd-box input.ok{border-color:var(--emerald);box-shadow:0 0 0 3px rgba(5,150,105,.12)}
-  .yd-act{display:flex;gap:10px;margin-top:16px}
-  .yd-act button{flex:1;min-height:48px;border-radius:10px;font-size:14px;font-weight:700;border:1.5px solid var(--border);background:#fff;color:var(--text-mid)}
-  .yd-act button.go{background:var(--crimson);border-color:var(--crimson);color:#fff}
-  .yd-act button:disabled{opacity:.45;cursor:not-allowed}
+
+  /* ---- Bulk delete confirmation window ---- */
+  .yd-back{position:fixed;inset:0;z-index:10000;background:rgba(7,13,38,.62);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;animation:ydFade .18s ease-out}
+  .yd-box{position:relative;background:#fff;border-radius:22px;width:100%;max-width:440px;max-height:92vh;max-height:92dvh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 0 1px rgba(8,16,31,.06),0 30px 80px -12px rgba(8,16,31,.55);animation:ydPop .24s cubic-bezier(.2,.9,.3,1.1)}
+  .yd-box::before{content:'';position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,#DC2626,#F87171 55%,#DC2626)}
+  .yd-pane{display:flex;flex-direction:column;min-height:0;flex:1}
+  .yd-pane[hidden]{display:none}
+  .yd-body{padding:30px 26px 6px;overflow:auto}
+  .yd-head{display:flex;gap:16px;align-items:flex-start;margin-bottom:20px}
+  .yd-ic{flex:none;width:52px;height:52px;border-radius:16px;display:grid;place-items:center;font-size:21px;color:#DC2626;background:linear-gradient(160deg,#FEE2E2,#FECACA);box-shadow:inset 0 0 0 1px rgba(220,38,38,.18),0 8px 18px -8px rgba(220,38,38,.55)}
+  .yd-title{font-family:'Plus Jakarta Sans',sans-serif;font-size:21px;font-weight:800;letter-spacing:-.4px;line-height:1.2;color:#0C1629;margin:2px 0 5px}
+  .yd-sub{font-size:13.5px;line-height:1.5;color:#56688C;margin:0}
+  .yd-facts{list-style:none;margin:0 0 14px;padding:4px 16px;background:#F7F9FF;border:1px solid #E2E8F4;border-radius:14px}
+  .yd-facts li{display:flex;gap:12px;align-items:flex-start;padding:12px 0;font-size:13px;line-height:1.45;color:#3D4F6E}
+  .yd-facts li+li{border-top:1px solid #E2E8F4}
+  .yd-facts i{flex:none;width:18px;margin-top:2px;text-align:center;font-size:13px}
+  .yd-facts b{color:#0C1629;font-weight:700}
+  .yd-facts .i-bin{color:#D97706}.yd-facts .i-clock{color:#2563EB}.yd-facts .i-lock{color:#059669}
+  .yd-view{width:100%;display:flex;align-items:center;gap:12px;text-align:left;border:1.5px solid #E2E8F4;background:#fff;border-radius:14px;padding:12px 14px;margin:0 0 22px;font-size:13.5px;font-weight:700;color:#0C1629;cursor:pointer;transition:border-color .18s,box-shadow .18s,background .18s}
+  .yd-view:hover{border-color:#93B4FF;background:#F5F8FF;box-shadow:0 6px 18px -10px rgba(37,99,235,.5)}
+  .yd-view .yd-av{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#EFF6FF;color:#1D4ED8;font-size:14px}
+  .yd-view span{flex:1;min-width:0}
+  .yd-view small{display:block;font-weight:500;font-size:12px;color:#6B7FA8;margin-top:1px}
+  .yd-view .yd-chev{color:#A0AEC4;font-size:12px;transition:transform .18s}
+  .yd-view:hover .yd-chev{transform:translateX(3px);color:#2563EB}
+  .yd-label{display:block;font-size:13px;font-weight:700;color:#0C1629;margin:0 0 8px}
+  .yd-label b{display:inline-block;background:#FEE2E2;color:#B91C1C;border-radius:6px;padding:1px 7px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;letter-spacing:.5px}
+  .yd-input{width:100%;min-height:52px;border:1.5px solid #E2E8F4;border-radius:14px;padding:12px 16px;font-size:17px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#0C1629;background:#fff;outline:none;transition:border-color .18s,box-shadow .18s,background .18s}
+  .yd-input::placeholder{color:#C3CCDD;letter-spacing:3px}
+  .yd-input:focus{border-color:#DC2626;box-shadow:0 0 0 4px rgba(220,38,38,.12)}
+  .yd-input.ok{border-color:#059669;background:#F0FDF9;box-shadow:0 0 0 4px rgba(5,150,105,.12)}
+  .yd-foot{display:flex;gap:10px;padding:20px 26px 26px}
+  .yd-foot button{flex:1;min-height:50px;border-radius:14px;font-size:14.5px;font-weight:700;border:1.5px solid #E2E8F4;background:#fff;color:#3D4F6E;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:background .18s,box-shadow .18s,transform .12s,opacity .18s}
+  .yd-foot button:hover:not(:disabled){background:#F7F9FF}
+  .yd-foot button:active:not(:disabled){transform:scale(.98)}
+  .yd-foot .go{background:linear-gradient(180deg,#EF4444,#DC2626);border-color:#DC2626;color:#fff;box-shadow:0 10px 22px -8px rgba(220,38,38,.65)}
+  .yd-foot .go:hover:not(:disabled){background:linear-gradient(180deg,#F05252,#D52424)}
+  .yd-foot .go:disabled{opacity:.4;box-shadow:none;cursor:not-allowed}
+  .yd-foot .cancel{flex:0 0 38%}
+
+  /* names pane */
+  .yd-nh{display:flex;align-items:center;gap:12px;padding:24px 22px 14px}
+  .yd-back-btn{flex:none;width:40px;height:40px;border-radius:12px;border:1.5px solid #E2E8F4;background:#fff;color:#3D4F6E;font-size:14px;cursor:pointer;display:grid;place-items:center;transition:background .18s}
+  .yd-back-btn:hover{background:#F7F9FF}
+  .yd-nh h4{font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:800;letter-spacing:-.3px;color:#0C1629;margin:0;line-height:1.2}
+  .yd-nh p{font-size:12.5px;color:#6B7FA8;margin:2px 0 0}
+  .yd-sbox{position:relative;margin:0 22px 12px}
+  .yd-sbox>i.fa-search{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:#A0AEC4;font-size:13px;pointer-events:none}
+  .yd-sbox input{width:100%;min-height:46px;border:1.5px solid #E2E8F4;border-radius:12px;padding:10px 40px 10px 40px;font-size:15px;outline:none;color:#0C1629;background:#F7F9FF;transition:border-color .18s,box-shadow .18s,background .18s}
+  .yd-sbox input:focus{border-color:#3B82F6;background:#fff;box-shadow:0 0 0 4px rgba(59,130,246,.12)}
+  .yd-sbox .yd-clr{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:none;background:none;color:#6B7FA8;border-radius:50%;cursor:pointer;font-size:13px}
+  .yd-sbox .yd-clr:hover{background:#E8EEFF}
+  .yd-sbox .yd-clr[hidden]{display:none}
+  .yd-list{flex:1;min-height:160px;max-height:min(380px,50vh);overflow:auto;margin:0 12px;padding:0 10px 4px;list-style:none;overscroll-behavior:contain}
+  .yd-list li{display:flex;align-items:center;gap:12px;padding:9px 8px;border-radius:12px;font-size:14px;font-weight:600;color:#0C1629}
+  .yd-list li:hover{background:#F5F8FF}
+  .yd-list .n{flex:none;min-width:30px;text-align:right;font-size:11.5px;font-weight:700;color:#A0AEC4;font-variant-numeric:tabular-nums}
+  .yd-list .a{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;color:#1D4ED8;background:linear-gradient(160deg,#EFF6FF,#DBEAFE);box-shadow:inset 0 0 0 1px rgba(37,99,235,.15)}
+  .yd-list .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .yd-list mark{background:#FEF3C7;color:inherit;border-radius:4px;padding:0 1px}
+  .yd-empty{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:40px 20px;color:#6B7FA8;font-size:13.5px}
+  .yd-empty i{font-size:26px;color:#CBD5E8;margin-bottom:4px}
+  .yd-empty b{color:#0C1629}
+  .yd-count{padding:10px 26px 0;font-size:12.5px;color:#6B7FA8}
+  @keyframes ydFade{from{opacity:0}to{opacity:1}}
+  @keyframes ydPop{from{transform:translateY(14px) scale(.97);opacity:0}to{transform:none;opacity:1}}
   @media (max-width:640px){
     .yd-back{align-items:flex-end;padding:0}
-    .yd-box{max-width:none;border-radius:24px 24px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:ydUp .26s cubic-bezier(.2,.8,.2,1)}
-    @keyframes ydUp{from{transform:translateY(46px);opacity:0}to{transform:none;opacity:1}}
-  }`;
+    .yd-box{max-width:none;border-radius:26px 26px 0 0;animation:ydUp .28s cubic-bezier(.2,.8,.2,1)}
+    .yd-body{padding:28px 20px 4px}
+    .yd-foot{padding:16px 20px calc(20px + env(safe-area-inset-bottom))}
+    .yd-nh{padding:22px 16px 12px}
+    .yd-sbox{margin:0 16px 10px}
+    .yd-count{padding:8px 20px 0}
+    .yd-list{max-height:48vh}
+    @keyframes ydUp{from{transform:translateY(60px);opacity:0}to{transform:none;opacity:1}}
+  }
+  @media (prefers-reduced-motion:reduce){.yd-back,.yd-box{animation:none!important}}`;
   document.head.appendChild(st);
 
-  /* In-page confirmation window (replaces the browser's prompt box). Resolves true only when DELETE is typed. */
+  const esc = s => escapeHtml(s);
+  const initials = n => {
+    const p = String(n).replace(/[^\p{L}\s,]/gu, '').split(/[\s,]+/).filter(Boolean);
+    return ((p[0] || '?').charAt(0) + (p.length > 1 ? p[1].charAt(0) : '')).toUpperCase();
+  };
+  const hi = (name, q) => {
+    if (!q) return esc(name);
+    const i = name.toLowerCase().indexOf(q);
+    if (i < 0) return esc(name);
+    return esc(name.slice(0, i)) + '<mark>' + esc(name.slice(i, i + q.length)) + '</mark>' + esc(name.slice(i + q.length));
+  };
+
+  /* In-page confirmation window. Resolves true only when DELETE is typed.
+     Main screen shows a clean summary; "View selected names" opens a searchable list. */
   function askDelete(count, names) {
     return new Promise(resolve => {
       const back = document.createElement('div');
       back.className = 'yd-back';
-      const shown = names.slice(0, 6).map(n => '<span>' + escapeHtml(n) + '</span>').join('');
-      const more = names.length > 6 ? '<span>+' + (names.length - 6) + ' more</span>' : '';
-      back.innerHTML = '<div class="yd-box" role="dialog" aria-modal="true" aria-label="Confirm bulk delete">' +
-        '<div class="yd-ic"><i class="fas fa-trash-can"></i></div>' +
-        '<h4>Delete ' + count + ' member(s)?</h4>' +
-        '<p>They and <b>all their attendance</b> will be moved to the <b>Recycle Bin</b>. You can restore them within 30 days.</p>' +
-        '<div class="yd-names">' + shown + more + '</div>' +
-        '<label>Type <b>DELETE</b> to confirm</label>' +
-        '<input type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="DELETE"/>' +
-        '<div class="yd-act"><button type="button" class="cancel">Cancel</button><button type="button" class="go" disabled><i class="fas fa-trash"></i> Delete</button></div></div>';
+      back.innerHTML =
+        '<div class="yd-box" role="dialog" aria-modal="true" aria-labelledby="ydTitle">' +
+          '<div class="yd-pane" data-pane="main">' +
+            '<div class="yd-body">' +
+              '<div class="yd-head"><div class="yd-ic"><i class="fas fa-trash-can"></i></div>' +
+                '<div><h4 class="yd-title" id="ydTitle">Delete ' + count + ' member' + (count === 1 ? '' : 's') + '?</h4>' +
+                '<p class="yd-sub">This removes them from Youth Members. Nothing is lost for good.</p></div></div>' +
+              '<ul class="yd-facts">' +
+                '<li><i class="fas fa-box-archive i-bin"></i><span>Moved to the <b>Recycle Bin</b> together with <b>all their attendance</b>.</span></li>' +
+                '<li><i class="fas fa-clock-rotate-left i-clock"></i><span>You can <b>restore them within 30 days</b> from Admin Panel.</span></li>' +
+              '</ul>' +
+              '<button type="button" class="yd-view"><span class="yd-av"><i class="fas fa-users"></i></span><span>View selected names<small>Review and search the ' + count + ' member' + (count === 1 ? '' : 's') + '</small></span><i class="fas fa-chevron-right yd-chev"></i></button>' +
+              '<label class="yd-label" for="ydInput">Type <b>DELETE</b> to confirm</label>' +
+              '<input id="ydInput" class="yd-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="DELETE"/>' +
+            '</div>' +
+            '<div class="yd-foot"><button type="button" class="cancel">Cancel</button><button type="button" class="go" disabled><i class="fas fa-trash"></i> Delete ' + count + '</button></div>' +
+          '</div>' +
+          '<div class="yd-pane" data-pane="names" hidden>' +
+            '<div class="yd-nh"><button type="button" class="yd-back-btn" aria-label="Back"><i class="fas fa-arrow-left"></i></button>' +
+              '<div><h4>Selected members</h4><p>' + count + ' member' + (count === 1 ? '' : 's') + ' will be deleted</p></div></div>' +
+            '<div class="yd-sbox"><i class="fas fa-search"></i><input type="text" placeholder="Search a name" autocomplete="off" spellcheck="false" aria-label="Search selected names"/><button type="button" class="yd-clr" aria-label="Clear search" hidden><i class="fas fa-times"></i></button></div>' +
+            '<div class="yd-count" aria-live="polite"></div>' +
+            '<ul class="yd-list"></ul>' +
+            '<div class="yd-foot"><button type="button" class="back2">Back to confirm</button></div>' +
+          '</div>' +
+        '</div>';
       document.body.appendChild(back);
-      const inp = back.querySelector('input'), go = back.querySelector('.go');
-      setTimeout(() => inp.focus(), 60);
+
+      const main = back.querySelector('[data-pane="main"]'), pn = back.querySelector('[data-pane="names"]');
+      const inp = back.querySelector('#ydInput'), go = back.querySelector('.go');
+      const sIn = pn.querySelector('.yd-sbox input'), clr = pn.querySelector('.yd-clr'), list = pn.querySelector('.yd-list'), cnt = pn.querySelector('.yd-count');
+      setTimeout(() => inp.focus(), 80);
+
       const valid = () => inp.value.trim().toUpperCase() === 'DELETE';
       const done = v => { document.removeEventListener('keydown', onKey, true); back.remove(); resolve(v); };
-      const onKey = e => {
-        if (e.key === 'Escape') { e.preventDefault(); done(false); }
-        else if (e.key === 'Enter' && valid()) { e.preventDefault(); done(true); }
-      };
+      const inNames = () => !pn.hidden;
+
+      function drawList() {
+        const q = sIn.value.trim().toLowerCase();
+        clr.hidden = !q;
+        const rows = [];
+        names.forEach((n, i) => { if (!q || n.toLowerCase().includes(q)) rows.push([n, i + 1]); });
+        cnt.textContent = q ? rows.length + ' of ' + names.length + (rows.length === 1 ? ' match' : ' matches') : 'Showing all ' + names.length;
+        list.innerHTML = rows.length
+          ? rows.map(([n, i]) => '<li><span class="n">' + i + '</span><span class="a">' + esc(initials(n)) + '</span><span class="t" title="' + esc(n) + '">' + hi(n, q) + '</span></li>').join('')
+          : '<li class="yd-empty" style="display:flex"><i class="fas fa-user-slash"></i><span><b>No match</b> for “' + esc(sIn.value.trim()) + '”</span><span>Check the spelling or clear the search.</span></li>';
+        list.scrollTop = 0;
+      }
+      function openNames() {
+        main.hidden = true; pn.hidden = false;
+        sIn.value = ''; drawList();
+        setTimeout(() => sIn.focus(), 40);
+      }
+      function closeNames() {
+        pn.hidden = true; main.hidden = false;
+        setTimeout(() => inp.focus(), 40);
+      }
+
+      function onKey(e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (inNames()) { if (sIn.value) { sIn.value = ''; drawList(); } else closeNames(); } else done(false);
+        } else if (e.key === 'Enter' && !inNames() && valid()) { e.preventDefault(); done(true); }
+      }
       document.addEventListener('keydown', onKey, true);
+
       inp.addEventListener('input', () => { const v = valid(); go.disabled = !v; inp.classList.toggle('ok', v); });
       go.addEventListener('click', () => { if (valid()) done(true); });
       back.querySelector('.cancel').addEventListener('click', () => done(false));
+      back.querySelector('.yd-view').addEventListener('click', openNames);
+      pn.querySelector('.yd-back-btn').addEventListener('click', closeNames);
+      pn.querySelector('.back2').addEventListener('click', closeNames);
+      sIn.addEventListener('input', drawList);
+      clr.addEventListener('click', () => { sIn.value = ''; drawList(); sIn.focus(); });
       back.addEventListener('mousedown', e => { if (e.target === back) done(false); });
     });
   }
