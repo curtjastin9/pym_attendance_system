@@ -88,17 +88,14 @@ h1 em{font-style:normal;background:linear-gradient(110deg,var(--gold) 20%,#FFF3C
 .foot{padding:0 max(20px,5vw) clamp(12px,2.4vh,22px);text-align:center;font-size:12px;letter-spacing:.4px;color:rgba(255,255,255,.4);animation:fadeUp 1s var(--ease) 1.1s both}
 @keyframes fadeUp{from{opacity:0;transform:translate3d(0,10px,0)}to{opacity:1;transform:none}}
 
-/* Cursor: only transform, own compositor layers */
-.cur-dot,.cur-ring{position:fixed;left:0;top:0;pointer-events:none;z-index:9999;border-radius:50%;opacity:0;will-change:transform;contain:layout paint style}
-.cur-dot{width:8px;height:8px;margin:-4px 0 0 -4px;background:var(--gold)}
-.cur-ring{width:36px;height:36px;margin:-18px 0 0 -18px;border:1.5px solid rgba(255,255,255,.55)}
-.cur-ring i{position:absolute;inset:0;border-radius:50%;transition:transform .25s var(--ease),background .25s,border-color .25s;border:1.5px solid transparent}
-.cur-ring.hov i{transform:scale(1.7);background:rgba(245,184,46,.14);border-color:var(--gold)}
-.cur-ring.down i{transform:scale(.7);background:rgba(245,184,46,.25)}
-.has-cur .cur-dot,.has-cur .cur-ring{opacity:1}
-.has-cur,.has-cur a{cursor:none}
-.ripple{position:fixed;z-index:9998;pointer-events:none;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;border:2px solid var(--gold);animation:rip .7s var(--ease) forwards;will-change:transform,opacity}
-@keyframes rip{to{transform:scale(6);opacity:0}}
+/* Mouse glow: normal cursor stays, a soft light follows it (transform only = smooth) */
+.glow-wrap{position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:50;will-change:transform;opacity:0;transition:opacity .5s}
+.glow-wrap.on{opacity:1}
+.glow-wrap i{position:absolute;border-radius:50%;transform:translate(-50%,-50%);transition:transform .35s var(--ease),opacity .35s}
+.glow-wrap .g1{width:760px;height:760px;background:radial-gradient(circle,rgba(245,184,46,.20) 0%,rgba(245,184,46,.09) 25%,rgba(37,99,235,.08) 48%,transparent 70%)}
+.glow-wrap .g2{width:260px;height:260px;background:radial-gradient(circle,rgba(255,236,170,.42) 0%,rgba(245,184,46,.18) 38%,transparent 70%)}
+.glow-wrap.hov .g2{transform:translate(-50%,-50%) scale(1.6)}
+.glow-wrap.down .g2{transform:translate(-50%,-50%) scale(.8);opacity:.9}
 
 @media (max-width:760px){
   .wall{grid-template-columns:repeat(5,1fr);inset:-40%}
@@ -120,7 +117,6 @@ h1 em{font-style:normal;background:linear-gradient(110deg,var(--gold) 20%,#FFF3C
   <div class="shade" aria-hidden="true"></div>
   <div class="orb o1" aria-hidden="true"></div>
   <div class="orb o2" aria-hidden="true"></div>
-  <div class="spot" id="spot" aria-hidden="true"></div>
   <canvas id="fx" aria-hidden="true"></canvas>
   <div class="vig" aria-hidden="true"></div>
 
@@ -146,8 +142,7 @@ h1 em{font-style:normal;background:linear-gradient(110deg,var(--gold) 20%,#FFF3C
   <footer class="foot">Parish Youth Ministry · MQAP</footer>
 </header>
 
-<div class="cur-ring" id="curRing"><i></i></div>
-<div class="cur-dot" id="curDot"></div>
+<div class="glow-wrap" id="glow" aria-hidden="true"><i class="g1"></i><i class="g2"></i></div>
 
 <script>
 (function(){
@@ -167,44 +162,34 @@ h1 em{font-style:normal;background:linear-gradient(110deg,var(--gold) 20%,#FFF3C
   }
   document.getElementById('wall').innerHTML=h;
 
-  var spot=document.getElementById('spot'), ring=document.getElementById('curRing'), dot=document.getElementById('curDot');
-  var logo=document.getElementById('logoTilt'), btn=document.getElementById('mainBtn');
+  var glow=document.getElementById('glow');
 
   /* Pointer state: events only STORE values, rAF does all the drawing */
   var W=innerWidth,H=innerHeight;
   var px=W/2,py=H/2;            // raw pointer
-  var sx=px,sy=py;              // smoothed (spotlight, ring)
+  var sx=px,sy=py;              // smoothed glow position
   var active=false, moved=false;
-  var lx=0,ly=0,tlx=0,tly=0;    // logo tilt
-  var bx=0,by=0;                // button magnet
-  var btnRect=null;
 
   function onMove(e){
     px=e.clientX; py=e.clientY; active=true;
-    if(!moved){moved=true; sx=px; sy=py; if(fine&&!reduce)root.classList.add('has-cur'); spot.classList.add('on');}
+    if(!moved){moved=true; sx=px; sy=py;}
+    glow.classList.add('on');
   }
   if(window.PointerEvent){addEventListener('pointermove',onMove,{passive:true});}
   else{addEventListener('mousemove',onMove,{passive:true});addEventListener('touchmove',function(e){var t=e.touches[0];if(t)onMove(t);},{passive:true});}
-  document.addEventListener('mouseleave',function(){active=false;spot.classList.remove('on');});
-  document.addEventListener('mouseenter',function(){if(moved)spot.classList.add('on');});
+  document.addEventListener('mouseleave',function(){active=false;glow.classList.remove('on');});
+  document.addEventListener('mouseenter',function(){if(moved)glow.classList.add('on');});
   addEventListener('touchstart',function(e){var t=e.touches[0];if(t)onMove(t);},{passive:true});
+  addEventListener('touchend',function(){glow.classList.remove('on');active=false;},{passive:true});
 
-  if(fine&&!reduce){
-    document.querySelectorAll('[data-hover]').forEach(function(el){
-      el.addEventListener('mouseenter',function(){ring.classList.add('hov');});
-      el.addEventListener('mouseleave',function(){ring.classList.remove('hov');});
-    });
-    addEventListener('mousedown',function(){ring.classList.add('down');});
-    addEventListener('mouseup',function(){ring.classList.remove('down');});
-  }
-  addEventListener('click',function(e){
-    if(reduce)return;
-    var r=document.createElement('div'); r.className='ripple';
-    r.style.left=e.clientX+'px'; r.style.top=e.clientY+'px';
-    document.body.appendChild(r); setTimeout(function(){r.remove();},750);
+  document.querySelectorAll('[data-hover]').forEach(function(el){
+    el.addEventListener('mouseenter',function(){glow.classList.add('hov');});
+    el.addEventListener('mouseleave',function(){glow.classList.remove('hov');});
   });
+  addEventListener('mousedown',function(){glow.classList.add('down');});
+  addEventListener('mouseup',function(){glow.classList.remove('down');});
 
-  function measure(){W=innerWidth;H=innerHeight;btnRect=btn.getBoundingClientRect();}
+  function measure(){W=innerWidth;H=innerHeight;}
 
   /* Canvas particles (small count, adaptive) */
   var cv=document.getElementById('fx'), ctx=cv.getContext('2d',{alpha:true});
@@ -272,25 +257,7 @@ h1 em{font-style:normal;background:linear-gradient(110deg,var(--gold) 20%,#FFF3C
     if(slow>40&&parts.length>14){parts.length=Math.max(14,Math.floor(parts.length*.7));slow=0;} // auto-lighten on slow devices
 
     sx+=(px-sx)*e1; sy+=(py-sy)*e1;
-    if(moved){
-      spot.style.transform='translate3d('+sx.toFixed(1)+'px,'+sy.toFixed(1)+'px,0)';
-      if(fine&&!reduce){
-        dot.style.transform='translate3d('+px+'px,'+py+'px,0)';
-        ring.style.transform='translate3d('+sx.toFixed(1)+'px,'+sy.toFixed(1)+'px,0)';
-        tlx=(px/W-.5)*14; tly=(py/H-.5)*-12;
-        lx+=(tlx-lx)*e2; ly+=(tly-ly)*e2;
-        logo.style.transform='perspective(700px) rotateY('+lx.toFixed(2)+'deg) rotateX('+ly.toFixed(2)+'deg)';
-        /* magnet */
-        var tx=0,ty=0;
-        if(btnRect&&active){
-          var cx=btnRect.left+btnRect.width/2-bx, cy=btnRect.top+btnRect.height/2-by;
-          var ddx=px-cx, ddy=py-cy, dd=Math.sqrt(ddx*ddx+ddy*ddy);
-          if(dd<160){var f=1-dd/160;tx=ddx*.25*f;ty=ddy*.35*f;}
-        }
-        bx+=(tx-bx)*e2; by+=(ty-by)*e2;
-        btn.style.transform='translate3d('+bx.toFixed(2)+'px,'+by.toFixed(2)+'px,0)';
-      }
-    }
+    if(moved)glow.style.transform='translate3d('+sx.toFixed(1)+'px,'+sy.toFixed(1)+'px,0)';
     if(!reduce)drawFX(dt);
     requestAnimationFrame(frame);
   }
