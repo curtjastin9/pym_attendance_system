@@ -1,4 +1,5 @@
-/* Admin Panel → "Manage User Accounts" (set new password / change email). Loaded last on index.php. */
+/* Admin Panel → "Manage User Accounts" (set new password / change email). Loaded last on index.php.
+   + Users & Roles: delete window (single + bulk) that removes the account AND all its data. */
 (function () {
   const css = `
   .acc-search{position:relative;margin:4px 0 12px;max-width:340px}
@@ -131,6 +132,262 @@
         modal('Change Email', `Gmail for <b>${escapeHtml(u.full_name)}</b>. Leave blank to remove it.`,
           'email', u.email || '', 'yourname@gmail.com', v => ac('admin_set_email', { id: u.id, email: v }));
       }
+    });
+  });
+})();
+
+/* ============================================================
+   Users & Roles — DELETE window (single + bulk), same concept as Youth Members.
+   Deletes the account AND everything tied to it (linked youth record + all attendance).
+   Uses the .yd-* / .yb-* styles that adminevents.js already injects.
+   ============================================================ */
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => escapeHtml(s);
+  const initials = n => {
+    const p = String(n).replace(/[^\p{L}\s,]/gu, '').split(/[\s,]+/).filter(Boolean);
+    return ((p[0] || '?').charAt(0) + (p.length > 1 ? p[1].charAt(0) : '')).toUpperCase();
+  };
+  const hi = (name, q) => {
+    if (!q) return esc(name);
+    const i = name.toLowerCase().indexOf(q);
+    if (i < 0) return esc(name);
+    return esc(name.slice(0, i)) + '<mark>' + esc(name.slice(i, i + q.length)) + '</mark>' + esc(name.slice(i + q.length));
+  };
+
+  /* Confirmation window. Resolves true only when DELETE is typed. */
+  function askDelete(names) {
+    const count = names.length, one = count === 1;
+    return new Promise(resolve => {
+      const back = document.createElement('div');
+      back.className = 'yd-back';
+      back.innerHTML =
+        '<div class="yd-box" role="dialog" aria-modal="true" aria-labelledby="udTitle">' +
+          '<div class="yd-pane" data-pane="main">' +
+            '<div class="yd-body">' +
+              '<div class="yd-head"><div class="yd-ic"><i class="fas fa-user-xmark"></i></div>' +
+                '<div><h4 class="yd-title" id="udTitle">' + (one ? 'Delete ' + esc(names[0]) + '?' : 'Delete ' + count + ' accounts?') + '</h4>' +
+                '<p class="yd-sub">' + (one ? 'This account will lose access and all its data will be removed.' : 'These accounts will lose access and all their data will be removed.') + '</p></div></div>' +
+              '<ul class="yd-facts">' +
+                '<li><i class="fas fa-user-slash i-lock" style="color:#DC2626"></i><span>The <b>login account</b> and its <b>linked youth member record</b> are deleted.</span></li>' +
+                '<li><i class="fas fa-clipboard-list i-bin"></i><span><b>All attendance</b> (slots and events), server and leader roles are deleted too.</span></li>' +
+                '<li><i class="fas fa-clock-rotate-left i-clock"></i><span>Backed up in the <b>Recycle Bin</b>: restore within <b>30 days</b> from Admin Panel.</span></li>' +
+              '</ul>' +
+              (one ? '' : '<button type="button" class="yd-view"><span class="yd-av"><i class="fas fa-users"></i></span><span>View selected accounts<small>Review and search the ' + count + ' accounts</small></span><i class="fas fa-chevron-right yd-chev"></i></button>') +
+              '<label class="yd-label" for="udInput">Type <b>DELETE</b> to confirm</label>' +
+              '<input id="udInput" class="yd-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="DELETE"/>' +
+            '</div>' +
+            '<div class="yd-foot"><button type="button" class="cancel">Cancel</button><button type="button" class="go" disabled><i class="fas fa-trash"></i> Delete' + (one ? '' : ' ' + count) + '</button></div>' +
+          '</div>' +
+          (one ? '' :
+          '<div class="yd-pane" data-pane="names" hidden>' +
+            '<div class="yd-nh"><button type="button" class="yd-back-btn" aria-label="Back"><i class="fas fa-arrow-left"></i></button>' +
+              '<div><h4>Selected accounts</h4><p>' + count + ' accounts will be deleted</p></div></div>' +
+            '<div class="yd-sbox"><i class="fas fa-search"></i><input type="text" placeholder="Search a name" autocomplete="off" spellcheck="false" aria-label="Search selected accounts"/><button type="button" class="yd-clr" aria-label="Clear search" hidden><i class="fas fa-times"></i></button></div>' +
+            '<div class="yd-count" aria-live="polite"></div>' +
+            '<ul class="yd-list"></ul>' +
+            '<div class="yd-foot"><button type="button" class="back2">Back to confirm</button></div>' +
+          '</div>') +
+        '</div>';
+      document.body.appendChild(back);
+
+      const main = back.querySelector('[data-pane="main"]'), pn = back.querySelector('[data-pane="names"]');
+      const inp = back.querySelector('#udInput'), go = back.querySelector('.go');
+      setTimeout(() => inp.focus(), 80);
+
+      const valid = () => inp.value.trim().toUpperCase() === 'DELETE';
+      const done = v => { document.removeEventListener('keydown', onKey, true); back.remove(); resolve(v); };
+      const inNames = () => pn && !pn.hidden;
+
+      let sIn, clr, list, cnt;
+      function drawList() {
+        const q = sIn.value.trim().toLowerCase();
+        clr.hidden = !q;
+        const rows = [];
+        names.forEach((n, i) => { if (!q || n.toLowerCase().includes(q)) rows.push([n, i + 1]); });
+        cnt.textContent = q ? rows.length + ' of ' + names.length + (rows.length === 1 ? ' match' : ' matches') : 'Showing all ' + names.length;
+        list.innerHTML = rows.length
+          ? rows.map(([n, i]) => '<li><span class="n">' + i + '</span><span class="a">' + esc(initials(n)) + '</span><span class="t" title="' + esc(n) + '">' + hi(n, q) + '</span></li>').join('')
+          : '<li class="yd-empty" style="display:flex"><i class="fas fa-user-slash"></i><span><b>No match</b> for “' + esc(sIn.value.trim()) + '”</span><span>Check the spelling or clear the search.</span></li>';
+        list.scrollTop = 0;
+      }
+      function openNames() { main.hidden = true; pn.hidden = false; sIn.value = ''; drawList(); setTimeout(() => sIn.focus(), 40); }
+      function closeNames() { pn.hidden = true; main.hidden = false; setTimeout(() => inp.focus(), 40); }
+
+      function onKey(e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (inNames()) { if (sIn.value) { sIn.value = ''; drawList(); } else closeNames(); } else done(false);
+        } else if (e.key === 'Enter' && !inNames() && valid()) { e.preventDefault(); done(true); }
+      }
+      document.addEventListener('keydown', onKey, true);
+
+      inp.addEventListener('input', () => { const v = valid(); go.disabled = !v; inp.classList.toggle('ok', v); });
+      go.addEventListener('click', () => { if (valid()) done(true); });
+      back.querySelector('.cancel').addEventListener('click', () => done(false));
+      back.addEventListener('mousedown', e => { if (e.target === back) done(false); });
+
+      if (!one) {
+        sIn = pn.querySelector('.yd-sbox input'); clr = pn.querySelector('.yd-clr');
+        list = pn.querySelector('.yd-list'); cnt = pn.querySelector('.yd-count');
+        back.querySelector('.yd-view').addEventListener('click', openNames);
+        pn.querySelector('.yd-back-btn').addEventListener('click', closeNames);
+        pn.querySelector('.back2').addEventListener('click', closeNames);
+        sIn.addEventListener('input', drawList);
+        clr.addEventListener('click', () => { sIn.value = ''; drawList(); sIn.focus(); });
+      }
+    });
+  }
+
+  async function deleteApi(ids) {
+    try {
+      const r = await fetch('api_bulkusers.php?action=bulk_delete_users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      return await r.json();
+    } catch (e) { return { success: false, message: 'Network error. Please check your connection.' }; }
+  }
+
+  let ON = false, ME = 0;
+  const SEL = new Set();
+
+  const userName = id => {
+    const u = (typeof ALL_USERS !== 'undefined' ? ALL_USERS : []).find(x => String(x.id) === String(id));
+    return u ? u.full_name : 'Account #' + id;
+  };
+  const rows = () => Array.from(document.querySelectorAll('#usersTableBody tr')).filter(r => r.querySelector('.ub-cb'));
+
+  function refreshBar() {
+    const bar = $('ubBar');
+    if (!bar) return;
+    const all = rows(), n = SEL.size;
+    bar.querySelector('.yb-count').textContent = n ? n + ' account(s) selected' : 'Tick the accounts you want to delete';
+    const del = bar.querySelector('.ub-del');
+    del.disabled = !n;
+    del.innerHTML = '<i class="fas fa-trash"></i> Delete selected' + (n ? ' (' + n + ')' : '');
+    const a = bar.querySelector('.ub-all');
+    a.checked = all.length > 0 && n === all.length;
+    a.indeterminate = n > 0 && n < all.length;
+  }
+
+  function decorate() {
+    const btn = $('ubToggle');
+    if (btn) btn.classList.toggle('on', ON);
+    const old = $('ubBar'); if (old) old.remove();
+    if (!ON) return;
+    const tb = $('usersTableBody');
+    if (!tb) return;
+    const present = new Set();
+    Array.from(tb.querySelectorAll('tr')).forEach(r => {
+      const d = r.querySelector('.delete-btn[data-id]');
+      if (!d) return;
+      const id = String(d.dataset.id), td = r.cells[0];
+      if (Number(id) === ME) {
+        SEL.delete(id);
+        if (!td.querySelector('.yb-lock')) td.insertAdjacentHTML('afterbegin', '<i class="fas fa-lock yb-lock" title="This is your own account"></i>');
+        return;
+      }
+      present.add(id);
+      if (td.querySelector('.ub-cb')) return;
+      td.insertAdjacentHTML('afterbegin', '<input type="checkbox" class="yb-cb ub-cb" value="' + id + '"' + (SEL.has(id) ? ' checked' : '') + ' aria-label="Select account"/>');
+      r.classList.toggle('yb-sel', SEL.has(id));
+    });
+    Array.from(SEL).forEach(id => { if (!present.has(id)) SEL.delete(id); });
+    const bar = document.createElement('div');
+    bar.id = 'ubBar';
+    bar.className = 'yb-bar';
+    bar.innerHTML = '<label><input type="checkbox" class="ub-all"/> Select all</label><span class="yb-count"></span>' +
+      '<button type="button" class="yb-del ub-del" disabled><i class="fas fa-trash"></i> Delete selected</button>' +
+      '<button type="button" class="yb-cancel ub-cancel">Cancel</button>' +
+      '<span class="yb-hint"><i class="fas fa-lock"></i> Your own account is locked. Deleting an account also deletes its youth record and all attendance.</span>';
+    tb.closest('.table-wrap').before(bar);
+    refreshBar();
+  }
+
+  function stop() { ON = false; SEL.clear(); }
+
+  async function afterDelete(res) {
+    alert(res.message);
+    try { await loadUsers(); } catch (_) {}
+    try { if (typeof loadYouth === 'function') loadYouth(); } catch (_) {}
+    try { if (typeof loadDashboardStats === 'function') loadDashboardStats(); } catch (_) {}
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    const page = $('page-users');
+    if (!page || typeof apiCall !== 'function' || typeof loadUsers !== 'function') return;
+    const s = await apiCall('check_session');
+    if (!(s.success && s.data.role === 'secretariat')) return;
+    ME = Number(s.data.id);
+
+    // "Bulk delete" button next to "Add User"
+    const addBtn = $('showUserFormBtn');
+    if (addBtn) {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center';
+      addBtn.before(wrap);
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.id = 'ubToggle'; btn.className = 'yb-toggle';
+      btn.title = 'Bulk delete accounts (with all their data)';
+      btn.innerHTML = '<i class="fas fa-list-check"></i> Bulk delete';
+      wrap.appendChild(btn);
+      wrap.appendChild(addBtn);
+      btn.addEventListener('click', () => { if (ON) stop(); else { ON = true; SEL.clear(); } loadUsers(); });
+    }
+
+    // Re-draw checkboxes every time the table reloads
+    const _lu = loadUsers;
+    loadUsers = async function () {
+      await _lu.apply(this, arguments);
+      try { decorate(); } catch (e) { console.error(e); }
+    };
+
+    const tb = $('usersTableBody');
+
+    // Single delete (trash icon) → same window, replaces the old prompt
+    tb.addEventListener('click', async e => {
+      const b = e.target.closest('.delete-btn');
+      if (!b) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      const id = Number(b.dataset.id);
+      if (id === ME) { alert('You cannot delete your own account.'); return; }
+      const ok = await askDelete([userName(id)]);
+      if (!ok) return;
+      b.disabled = true;
+      const res = await deleteApi([id]);
+      b.disabled = false;
+      await afterDelete(res);
+    }, true);
+
+    tb.addEventListener('change', e => {
+      const c = e.target.closest('.ub-cb');
+      if (!c) return;
+      if (c.checked) SEL.add(c.value); else SEL.delete(c.value);
+      c.closest('tr').classList.toggle('yb-sel', c.checked);
+      refreshBar();
+    });
+
+    page.addEventListener('change', e => {
+      if (!e.target.classList.contains('ub-all')) return;
+      rows().forEach(r => {
+        const cb = r.querySelector('.ub-cb');
+        cb.checked = e.target.checked;
+        r.classList.toggle('yb-sel', cb.checked);
+        if (cb.checked) SEL.add(cb.value); else SEL.delete(cb.value);
+      });
+      refreshBar();
+    });
+
+    page.addEventListener('click', async e => {
+      if (e.target.closest('.ub-cancel')) { stop(); loadUsers(); return; }
+      const del = e.target.closest('.ub-del');
+      if (!del || !SEL.size) return;
+      const ids = Array.from(SEL).map(Number).filter(id => id !== ME);
+      if (!ids.length) return;
+      const ok = await askDelete(ids.map(userName));
+      if (!ok) return;
+      del.disabled = true;
+      const res = await deleteApi(ids);
+      if (res.success) stop();
+      await afterDelete(res);
     });
   });
 })();
