@@ -25,6 +25,7 @@
     { "src": "**/*.js", "use": "@vercel/static" }
   ],
   "routes": [
+    { "src": "/(.*)\\.(css|js|png|jpg|jpeg|svg|ico|webp|PNG|JPG)", "headers": { "Cache-Control": "public, max-age=300" }, "continue": true },
     { "src": "/", "dest": "/home.php" },
     { "src": "/(index|login)\\.html", "dest": "/home.php" },
     { "src": "/(home|index|login|api|api_records|api_coy|api_attendance|api_account|api_slotchange|api_eventleaders|api_bulkdelete|api_bulkyouth)\\.php", "dest": "/$1.php" },

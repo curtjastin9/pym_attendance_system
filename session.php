@@ -194,7 +194,10 @@ if (session_status() === PHP_SESSION_NONE) {
 
 /* ---- Account features ----
  * 1) Old one-step self-registration is closed (registration now needs the emailed code).
- * 2) The Admin "Manage User Accounts" script is added to the dashboard page. */
+ * 2) The Admin "Manage User Accounts" script is added to the dashboard page.
+ * 3) Speed: the dashboard page gets early connection hints + starts the first data requests
+ *    while scripts are still downloading, and the heavy Excel library is no longer loaded up front
+ *    (mobile.js downloads it only when someone exports). */
 (function () {
     $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
     $file = basename($_SERVER['SCRIPT_FILENAME'] ?? '') ?: basename($path);
@@ -205,6 +208,12 @@ if (session_status() === PHP_SESSION_NONE) {
     }
     if ($file === 'index.php' || substr($path, -10) === '/index.php') {
         ob_start(function ($html) {
+            $early = <<<'HTML'
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<script>(function(){try{var P=window.__pre={};['api.php?action=check_session','api.php?action=get_dashboard_stats','api.php?action=get_alerts','api_slotchange.php?action=list','api_coy.php?action=get_my_position'].forEach(function(u){P[u+'|{}']={t0:Date.now(),p:fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(function(r){return r.text().then(function(t){return{text:t,status:r.status}})}).catch(function(){return null})}})}catch(e){}})();</script>
+HTML;
+            $html = preg_replace_callback('~<head>~i', function () use ($early) { return '<head>' . $early; }, $html, 1);
+            $html = preg_replace('~<script[^>]*xlsx\.full\.min\.js[^>]*></script>\s*~i', '', $html, 1);
             return preg_replace('~</body>~i', '<script src="admin_accounts.js"></script><script src="slotchange.js"></script></body>', $html, 1);
         });
     }

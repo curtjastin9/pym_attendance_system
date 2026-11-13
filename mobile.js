@@ -1,5 +1,8 @@
 /* ============================================================
-   PYM — Mobile, tablet & accessibility helpers (load LAST)
+   PYM — Speed layer + mobile, tablet & accessibility helpers (load LAST)
+   • Speed: removes duplicate requests, short-lived cache for reads,
+     retry on network blips, double-submit protection, top progress bar,
+     lazy-loaded Excel library
    • Loads responsive.css (tablet / laptop / touch layer)
    • Non-blocking toasts replace alert()
    • Tables get data-labels so they can render as cards on phones
@@ -8,6 +11,126 @@
    ============================================================ */
 (function () {
   'use strict';
+
+  /* ============================================================
+     SPEED LAYER — wraps fetch() for every api*.php?action=... call
+     ============================================================ */
+  (function speed() {
+    if (window.__pymSpeed || typeof window.fetch !== 'function') return;
+    window.__pymSpeed = true;
+
+    const nativeFetch = window.fetch.bind(window);
+    const API_RE = /(?:^|\/)(api[a-z_]*\.php)\?action=([a-z_]+)/i;
+    const READ_RE = /^(get_[a-z_]+|get|check_session|list|options|users|my_account|admin_accounts|locked_ids|search_members|find_event)$/;
+    const HEAVY_RE = /^(get_records|get_monthly_calendar|get_alerts|get_dashboard_stats|get_report)$/;
+    const store = new Map();   // key -> entry
+    let gen = 0, pending = 0, barTimer = null, bar = null;
+
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const mk = o => new Response(o.text, { status: o.status, headers: { 'Content-Type': 'application/json' } });
+
+    /* thin progress bar (only shows if something takes longer than 0.35s) */
+    const css = '.pym-bar{position:fixed;left:0;top:0;height:3px;width:100%;z-index:10001;pointer-events:none;opacity:0;overflow:hidden;transition:opacity .2s}' +
+      '.pym-bar.on{opacity:1}.pym-bar i{display:block;height:100%;width:40%;background:linear-gradient(90deg,transparent,#F5B82E,#3B82F6,transparent);transform:translateX(-100%);animation:pymbar 1.1s linear infinite;will-change:transform}' +
+      '@keyframes pymbar{from{transform:translateX(-100%)}to{transform:translateX(350%)}}';
+    const sty = document.createElement('style'); sty.textContent = css; document.head.appendChild(sty);
+    function busy(d) {
+      pending = Math.max(0, pending + d);
+      if (!bar && document.body) { bar = document.createElement('div'); bar.className = 'pym-bar'; bar.innerHTML = '<i></i>'; bar.setAttribute('aria-hidden', 'true'); document.body.appendChild(bar); }
+      clearTimeout(barTimer);
+      if (pending > 0) barTimer = setTimeout(() => bar && bar.classList.add('on'), 350);
+      else if (bar) bar.classList.remove('on');
+    }
+
+    async function net(url, init, retry) {
+      for (let i = 0; ; i++) {
+        try {
+          const r = await nativeFetch(url, init);
+          const text = await r.text();
+          const bad = r.status >= 500 || text.trim().charAt(0) !== '{';
+          if (bad && retry && i === 0) { await sleep(700); continue; }   // one quiet retry for reads (cold start / network blip)
+          return { text, status: r.status };
+        } catch (e) {
+          if (retry && i === 0) { await sleep(700); continue; }
+          throw e;
+        }
+      }
+    }
+
+    function invalidate(action) {
+      const keepSession = action !== 'login' && action !== 'logout';
+      for (const [k, v] of store) {
+        if (v.write) continue;
+        if (v.action === 'check_session' && keepSession) continue;
+        store.delete(k);
+      }
+    }
+
+    window.fetch = function (url, init) {
+      if (typeof url !== 'string' || !init || String(init.method || '').toUpperCase() !== 'POST' || typeof init.body !== 'string') return nativeFetch(url, init);
+      const m = url.match(API_RE);
+      if (!m) return nativeFetch(url, init);
+
+      const action = m[2].toLowerCase();
+      const isRead = READ_RE.test(action);
+      const key = url + '|' + init.body;
+
+      // Same request already running or freshly answered → reuse it (also stops double-tap duplicate saves)
+      const hit = store.get(key);
+      if (hit && (hit.pending || Date.now() - hit.t < hit.ttl)) return hit.p.then(mk);
+
+      const entry = {
+        action, write: !isRead, pending: true, t: 0, gen,
+        ttl: action === 'check_session' ? Infinity : (HEAVY_RE.test(action) ? 10000 : 4000)
+      };
+
+      let src;
+      const pre = isRead && window.__pre && window.__pre[key];
+      if (pre) {
+        delete window.__pre[key];
+        src = (Date.now() - pre.t0 < 8000) ? pre.p.then(o => o || net(url, init, true)) : net(url, init, true);
+      } else {
+        busy(1);
+        src = net(url, init, isRead);
+        src.then(() => busy(-1), () => busy(-1));
+      }
+
+      entry.p = src.then(o => {
+        entry.pending = false; entry.t = Date.now();
+        const ok = /"success"\s*:\s*true/.test(o.text);
+        if (entry.write) { if (store.get(key) === entry) store.delete(key); gen++; invalidate(action); }
+        else if (!ok || entry.gen !== gen) { if (store.get(key) === entry) store.delete(key); }
+        return o;
+      }, e => { if (store.get(key) === entry) store.delete(key); throw e; });
+
+      store.set(key, entry);
+      if (!isRead) { gen++; invalidate(action); }
+      return entry.p.then(mk);
+    };
+
+    /* Excel library (~900KB) is only downloaded when it is really needed */
+    let xl = null;
+    window.pymLoadXLSX = function () {
+      if (typeof XLSX !== 'undefined') return Promise.resolve();
+      if (xl) return xl;
+      xl = new Promise((ok, bad) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = ok;
+        s.onerror = () => { xl = null; bad(new Error('xlsx')); };
+        document.head.appendChild(s);
+      });
+      return xl;
+    };
+    if (typeof recExport === 'function') {
+      const _re = recExport;
+      recExport = async function () {
+        try { await window.pymLoadXLSX(); }
+        catch (e) { alert('The Excel library could not be loaded. Check your internet connection and try again.'); return; }
+        return _re.apply(this, arguments);
+      };
+    }
+  })();
 
   /* ---------- Load the responsive layer ---------- */
   if (!document.querySelector('link[href^="responsive.css"]')) {
@@ -90,10 +213,13 @@
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && sidebar.classList.contains('open') && overlay) overlay.click();
     });
-    // New page → start at the top
     document.querySelectorAll('.sidebar .nav-item').forEach(n => n.addEventListener('click', () => window.scrollTo({ top: 0 })));
 
-    // Rotating a tablet / resizing a window to laptop size: close the drawer so nothing stays stuck open
+    // Warm up the Excel library as soon as the Records page is opened
+    const rec = document.querySelector('.nav-item[data-page="records"]');
+    if (rec) rec.addEventListener('click', () => { if (window.pymLoadXLSX) window.pymLoadXLSX().catch(() => {}); });
+
+    // Rotating a tablet / resizing a window to laptop size: close the drawer
     let lastW = window.innerWidth;
     window.addEventListener('resize', () => {
       const w = window.innerWidth;
@@ -120,7 +246,6 @@
     const items = Array.from(nav.querySelectorAll('.bn-item[data-page]'));
     const more = nav.querySelector('.bn-more');
 
-    // Click the real sidebar item so every page's own handlers (e.g. Records) still run
     items.forEach(b => b.addEventListener('click', () => {
       const real = document.querySelector('.sidebar .nav-item[data-page="' + b.dataset.page + '"]');
       if (real) real.click();
@@ -196,7 +321,6 @@
     enhanceTables();
     initNav();
     initPasswords();
-    // Make sure these stylesheets are last in the cascade (win over injected <style> blocks)
     ['mobile.css', 'responsive.css'].forEach(n => {
       const link = document.querySelector('link[href^="' + n + '"]');
       if (link) document.head.appendChild(link);
