@@ -1,11 +1,21 @@
 /* ============================================================
-   PYM — Mobile & accessibility helpers (load LAST)
+   PYM — Mobile, tablet & accessibility helpers (load LAST)
+   • Loads responsive.css (tablet / laptop / touch layer)
    • Non-blocking toasts replace alert()
    • Tables get data-labels so they can render as cards on phones
    • Bottom navigation, drawer a11y, password show/hide
+   • Keyboard-aware bottom bar, skip link, drawer reset on resize
    ============================================================ */
 (function () {
   'use strict';
+
+  /* ---------- Load the responsive layer ---------- */
+  if (!document.querySelector('link[href^="responsive.css"]')) {
+    const rl = document.createElement('link');
+    rl.rel = 'stylesheet';
+    rl.href = 'responsive.css?v=1';
+    document.head.appendChild(rl);
+  }
 
   /* ---------- Toasts ---------- */
   const css = `
@@ -83,6 +93,28 @@
     // New page → start at the top
     document.querySelectorAll('.sidebar .nav-item').forEach(n => n.addEventListener('click', () => window.scrollTo({ top: 0 })));
 
+    // Rotating a tablet / resizing a window to laptop size: close the drawer so nothing stays stuck open
+    let lastW = window.innerWidth;
+    window.addEventListener('resize', () => {
+      const w = window.innerWidth;
+      if (w > 1023 && lastW <= 1023) {
+        sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('open');
+      }
+      lastW = w;
+    });
+
+    // Skip link for keyboard users (laptop)
+    const main = document.getElementById('mainContent');
+    if (main && !document.querySelector('.skip-link')) {
+      main.setAttribute('tabindex', '-1');
+      const a = document.createElement('a');
+      a.className = 'skip-link';
+      a.href = '#mainContent';
+      a.textContent = 'Skip to content';
+      document.body.insertBefore(a, document.body.firstChild);
+    }
+
     const nav = document.querySelector('.bottom-nav');
     if (!nav) return;
     const items = Array.from(nav.querySelectorAll('.bn-item[data-page]'));
@@ -143,20 +175,32 @@
     });
   }
 
-  /* ---------- Keep the focused field visible above the keyboard ---------- */
+  /* ---------- Keyboard-aware: keep the field visible, hide the bottom bar while typing ---------- */
+  let kbTimer = null;
+  const isTouch = () => window.matchMedia('(pointer:coarse)').matches || window.innerWidth <= 768;
   document.addEventListener('focusin', e => {
-    if (window.innerWidth > 768) return;
-    if (!/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
-    setTimeout(() => { try { e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {} }, 320);
+    const t = e.target;
+    if (!/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return;
+    if (/^(checkbox|radio|button|submit)$/.test(t.type)) return;
+    if (!isTouch()) return;
+    clearTimeout(kbTimer);
+    document.body.classList.add('kb');
+    setTimeout(() => { try { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {} }, 320);
+  });
+  document.addEventListener('focusout', () => {
+    clearTimeout(kbTimer);
+    kbTimer = setTimeout(() => document.body.classList.remove('kb'), 150);
   });
 
   function boot() {
     enhanceTables();
     initNav();
     initPasswords();
-    // Make sure this stylesheet is last in the cascade (wins over injected <style> blocks)
-    const link = document.querySelector('link[href^="mobile.css"]');
-    if (link) document.head.appendChild(link);
+    // Make sure these stylesheets are last in the cascade (win over injected <style> blocks)
+    ['mobile.css', 'responsive.css'].forEach(n => {
+      const link = document.querySelector('link[href^="' + n + '"]');
+      if (link) document.head.appendChild(link);
+    });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

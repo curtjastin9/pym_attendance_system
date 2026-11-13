@@ -1,0 +1,136 @@
+/* ============================================================
+   PYM — Responsive layer v1 (laptop · tablet · phone)
+   Loaded automatically by mobile.js (last in the cascade).
+   Phones (<=768px) keep using mobile.css; this file adds:
+   - a proper tablet mode (769–1023px): drawer menu + bottom bar
+   - better laptop / wide / short-screen layouts
+   - touch comfort (bigger tap targets, no stuck hover, no iOS zoom)
+   ============================================================ */
+
+/* ---------- All devices ---------- */
+.admin-tabs-wrap { max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.admin-tabs-wrap::-webkit-scrollbar { display: none; }
+.admin-tab { white-space: nowrap; flex: none; }
+.ae-tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.ae-tabs::-webkit-scrollbar { display: none; }
+.ae-tab { white-space: nowrap; flex: none; }
+
+/* Pop-ups never taller than the screen (short landscape screens) */
+.acc-box, .rsn-box, .sc-box { max-height: 92vh; max-height: 92dvh; overflow: auto; }
+
+.table-wrap { -webkit-overflow-scrolling: touch; }
+
+/* ---------- Touch screens (phone + tablet) ---------- */
+@media (pointer: coarse) {
+  input[type], input:not([type]), select, textarea { font-size: 16px !important; }   /* stops iOS zoom-on-focus */
+  .table-btn { width: 42px; height: 42px; font-size: 14px; border-radius: 12px; margin-bottom: 4px; }
+  .att-seg button { min-height: 42px; padding: 0 14px; }
+  .status-toggle { min-height: 40px; }
+  .cal-nav-btn { width: 42px; height: 42px; }
+  .auth-tab, .admin-tab, .rec-tab, .ae-tab, .ev-btn, .rec-quick button { min-height: 42px; }
+  .rec-link { min-height: 36px; }
+  .leader-check, .rec-mem-item, .ldr-row, .srv-opt, .vis-opt, .coy-combo-opt { min-height: 44px; }
+}
+/* No "stuck" hover movement after a tap */
+@media (hover: none) {
+  .stat-card:hover, .service-row:hover, .event-item:hover, .cal-weekend:hover, .nav-item:hover i { transform: none; }
+}
+
+/* Keyboard open on a phone/tablet: hide the bottom bar, free the screen */
+body.kb .bottom-nav { display: none !important; }
+body.kb #attendancePanel .form-actions,
+body.kb #eventAttPanel .form-actions { bottom: 0 !important; }
+
+/* ---------- Scroll shadows on wide tables (tablet / laptop) ---------- */
+@media (min-width: 641px) {
+  .table-wrap {
+    background:
+      linear-gradient(to right, #fff 30%, rgba(255,255,255,0)) left center / 40px 100% no-repeat local,
+      linear-gradient(to left,  #fff 30%, rgba(255,255,255,0)) right center / 40px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%,   rgba(8,16,31,.18), transparent) left center / 12px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgba(8,16,31,.18), transparent) right center / 12px 100% no-repeat scroll;
+  }
+}
+
+/* ---------- Save bar always reachable on tablet + laptop ---------- */
+@media (min-width: 769px) {
+  #attendancePanel .form-actions, #eventAttPanel .form-actions {
+    position: sticky; bottom: 0; z-index: 5;
+    margin: 10px -24px -24px; padding: 14px 24px;
+    background: linear-gradient(to top, var(--surface) 75%, rgba(255,255,255,0));
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  }
+}
+
+/* ============================================================
+   LAPTOP — compact and wide screens
+   ============================================================ */
+@media (min-width: 1024px) and (max-width: 1280px) {
+  .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .stat-card { padding: 18px; }
+  .stat-number { font-size: 32px; }
+  .stat-icon { font-size: 28px; }
+  .page { padding: 24px 22px; }
+}
+@media (min-width: 1024px) and (max-height: 760px) {           /* small laptop screens */
+  .sidebar-logo { padding: 16px 20px 14px; }
+  .logo-icon.logo-img { width: 42px; height: 42px; }
+  .sidebar-user { padding: 10px 14px; margin: 6px 12px; }
+  .nav-item, .logout-btn { padding-top: 8px; padding-bottom: 8px; }
+  .nav-section { padding-top: 10px; }
+  .topbar { height: 58px; }
+  .att-search { top: 64px; }
+}
+@media (min-width: 1500px) {                                   /* big monitors: keep content readable */
+  .page { max-width: 1480px; width: 100%; margin-left: auto; margin-right: auto; }
+}
+
+/* ============================================================
+   TABLET (769–1023px) — drawer menu instead of a cramped sidebar
+   ============================================================ */
+@media (min-width: 769px) and (max-width: 1023px) {
+  .sidebar { transform: translateX(-100%); width: 300px; }
+  .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-lg); }
+  .overlay.open { display: block; }
+  .hamburger { display: flex; width: 44px; height: 44px; }
+  .main-content { margin-left: 0; }
+  .topbar { padding: 0 22px; }
+  .page { padding: 22px 22px 26px; }
+  .nav-item, .logout-btn { min-height: 48px; }
+
+  .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat-card { padding: 14px 16px; }
+  .stat-number { font-size: 27px; }
+  .stat-icon { display: none; }
+
+  .cal-cell { min-height: 84px; padding: 6px; }
+  .cal-event-dot { padding: 4px 6px; font-size: 10.5px; flex-wrap: wrap; }
+  .cal-ev-time { font-size: 10.5px; }
+  .cal-mark-btn { min-height: 34px; }
+
+  .form-actions .auth-btn, .form-actions .cancel-btn { min-height: 46px; }
+  .rec-filters { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Tablet bottom navigation (not for landscape phones, mobile.css handles those) */
+@media (min-width: 769px) and (max-width: 1023px) and (min-height: 521px) {
+  body { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .bottom-nav {
+    display: grid; grid-template-columns: repeat(var(--bn, 5), 1fr); gap: 4px;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 80;
+    background: rgba(255,255,255,.97); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    border-top: 1px solid var(--border); border-radius: 20px 20px 0 0;
+    padding: 8px 24px calc(8px + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 30px rgba(8,16,31,.08);
+  }
+  .bn-item {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    min-height: 56px; border: none; background: none; border-radius: 14px;
+    color: var(--text-soft); font-size: 11.5px; font-weight: 700;
+    transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  }
+  .bn-item i { font-size: 19px; }
+  .bn-item:active { background: var(--bg); }
+  .bn-item.active { color: var(--sapphire); background: var(--sapphire-pale); }
+  #attendancePanel .form-actions, #eventAttPanel .form-actions { bottom: calc(80px + env(safe-area-inset-bottom)); }
+}
